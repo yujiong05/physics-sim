@@ -12,6 +12,9 @@ from core.engine import PhysicsEngine
 from core.models import Ball, Block, Spring
 from gui.property_panel import PropertyPanel
 from gui.object_create_panel import ObjectCreatePanel
+from gui.data_panel import DataPanel
+from core.data_recorder import DataRecorder
+
 from storage.project_io import save_project, load_project
 from templates.experiment_templates import ALL_TEMPLATES
 
@@ -22,20 +25,99 @@ class MainWindow(QMainWindow):
         self.resize(1300, 800)
         
         self.engine = PhysicsEngine()
+        self.recorder = DataRecorder()
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_simulation)
         
-        # 绘图数据
-        self.time_data = []
-        self.vel_data = []
-        self.tracked_ball = None 
         self.ball_counter = 1
+        self.block_counter = 1
+        self.spring_counter = 1
+        self.initial_state_snapshot = None
         self.current_file_path = None
+
         
         self.create_menus()
         self.create_template_menu()
         self.init_ui()
-        self.reset_simulation()
+        self.init_ui()
+        self.clear_scene()
+        
+    def update_name_counters_from_scene(self):
+        import re
+        max_ball, max_block, max_spring = 0, 0, 0
+        for obj in self.engine.objects:
+            m = re.match(r'(ball|block|spring)(\d+)', obj.name.lower())
+            if m:
+                typ, num = m.groups()
+                num = int(num)
+                if typ == 'ball' and num > max_ball: max_ball = num
+                elif typ == 'block' and num > max_block: max_block = num
+                elif typ == 'spring' and num > max_spring: max_spring = num
+        self.ball_counter = max(self.ball_counter, max_ball + 1)
+        self.block_counter = max(self.block_counter, max_block + 1)
+        self.spring_counter = max(self.spring_counter, max_spring + 1)
+        
+    def get_next_default_name(self, object_type):
+        if object_type == "ball":
+            name = f"ball{self.ball_counter}"
+            self.ball_counter += 1
+        elif object_type == "block":
+            name = f"block{self.block_counter}"
+            self.block_counter += 1
+        elif object_type == "spring":
+            name = f"spring{self.spring_counter}"
+            self.spring_counter += 1
+        else:
+            name = f"{object_type}_1"
+        return name
+        
+    def capture_initial_state(self):
+        if self.is_playing: return
+        objects = [obj.get_state() for obj in self.engine.objects]
+        self.initial_state_snapshot = {
+            "engine": {
+                "gravity": self.engine.gravity.tolist(),
+                "bounds": self.engine.bounds
+            },
+            "objects": objects
+        }
+        
+    def restore_initial_state(self):
+        self.pause_simulation()
+        if not self.initial_state_snapshot: return
+        
+        self.scene.clear_items()
+        self.engine.clear()
+        
+        engine_data = self.initial_state_snapshot["engine"]
+        self.engine.gravity = np.array(engine_data["gravity"], dtype=np.float64)
+        self.engine.bounds = tuple(engine_data["bounds"])
+        
+        objects = []
+        for obj_data in self.initial_state_snapshot["objects"]:
+            t = obj_data.get("type")
+            if t == "ball": objects.append(Ball.from_state(obj_data))
+            elif t == "block": objects.append(Block.from_state(obj_data))
+            elif t == "spring": objects.append(Spring.from_state(obj_data))
+            
+        for obj in objects:
+            self.engine.add_object(obj)
+            self.scene.add_physics_object(obj)
+            
+        self.engine.time = 0.0
+        self.scene.clear_all_trails()
+        self.recorder.clear_all()
+        self.scene.update_items(playing=False)
+        self.data_panel.refresh_objects(self.engine.objects)
+        
+        if self.property_panel.current_obj:
+            cid = self.property_panel.current_obj.id
+            for obj in self.engine.objects:
+                if obj.id == cid:
+                    self.property_panel.set_object(obj)
+                    self.data_panel.select_object(obj)
+                    break
+
 
     def create_menus(self):
         menubar = self.menuBar()
@@ -74,7 +156,7 @@ class MainWindow(QMainWindow):
     def load_template(self, template_data):
         self.pause_simulation()
         engine_data = template_data.get("engine", {})
-        ball_counter = template_data.get("ball_counter", 1)
+        counters = template_data.get("counters", {"ball": template_data.get("ball_counter", 1), "block": 1, "spring": 1})
         scene_data   = template_data.get("scene", {})
 
         objects = []
@@ -87,7 +169,7 @@ class MainWindow(QMainWindow):
             elif t == "spring":
                 objects.append(Spring.from_state(obj_data))
 
-        self.apply_project_data(engine_data, objects, ball_counter, scene_data)
+        self.apply_project_data(engine_data, objects, counters, scene_data)
         self.current_file_path = None
         self.setWindowTitle(f"二维物理仿真实验室 - [{template_data.get('name', '实验模板')}]")
 
@@ -103,14 +185,14 @@ class MainWindow(QMainWindow):
         if not path:
             return
         try:
-            engine_data, objects, ball_counter, scene_data = load_project(path)
-            self.apply_project_data(engine_data, objects, ball_counter, scene_data)
+            engine_data, objects, counters, scene_data = load_project(path)
+            self.apply_project_data(engine_data, objects, counters, scene_data)
             self.current_file_path = path
             self.setWindowTitle(f"二维物理仿真实验室 - {path}")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"无法打开项目: {str(e)}")
 
-    def apply_project_data(self, engine_data, objects, ball_counter, scene_data):
+    def apply_project_data(self, engine_data, objects, counters, scene_data):
         self.clear_scene()
         self.engine.time = engine_data.get("time", 0.0)
         if "gravity" in engine_data:
@@ -118,7 +200,9 @@ class MainWindow(QMainWindow):
         if "bounds" in engine_data:
             self.engine.bounds = tuple(engine_data["bounds"])
 
-        self.ball_counter = ball_counter
+        self.ball_counter = counters.get("ball", 1)
+        self.block_counter = counters.get("block", 1)
+        self.spring_counter = counters.get("spring", 1)
 
         # 实验模式同步
         mode = scene_data.get("experiment_mode", "vertical")
@@ -138,9 +222,10 @@ class MainWindow(QMainWindow):
             self.engine.add_object(obj)
             self.scene.add_physics_object(obj)
 
-        if objects:
-            self.tracked_ball = objects[0]
-            self.scene.update_items(playing=False)
+        self.scene.update_items(playing=False)
+        self.update_name_counters_from_scene()
+        self.data_panel.refresh_objects(self.engine.objects)
+        self.capture_initial_state()
 
     def save_project(self):
         if not self.current_file_path:
@@ -152,7 +237,8 @@ class MainWindow(QMainWindow):
                     "show_trail": self.scene.show_trail,
                     "experiment_mode": "horizontal" if self.create_panel.rb_horizontal.isChecked() else "vertical"
                 }
-                save_project(self.current_file_path, self.engine, self.ball_counter, scene_data)
+                counters = {"ball": self.ball_counter, "block": self.block_counter, "spring": self.spring_counter}
+                save_project(self.current_file_path, self.engine, counters, scene_data)
                 self.setWindowTitle(f"二维物理仿真实验室 - {self.current_file_path}")
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"无法保存项目: {str(e)}")
@@ -237,12 +323,8 @@ class MainWindow(QMainWindow):
         self.scene.object_selected.connect(self.on_object_selected)
         right_layout.addWidget(self.property_panel)
         
-        self.plot_widget = pg.PlotWidget(title="速度-时间曲线 (Y轴)")
-        self.plot_widget.setLabel('left', 'Velocity Y', units='px/s')
-        self.plot_widget.setLabel('bottom', 'Time', units='s')
-        self.plot_widget.showGrid(x=True, y=True)
-        self.plot_curve = self.plot_widget.plot(pen='r')
-        right_layout.addWidget(self.plot_widget)
+        self.data_panel = DataPanel(self.recorder)
+        right_layout.addWidget(self.data_panel)
         
         main_layout.addLayout(right_layout, stretch=1)
 
@@ -256,6 +338,7 @@ class MainWindow(QMainWindow):
         else:
             self.engine.gravity = np.array([0.0, 980.0], dtype=np.float64)
             self.statusBar().showMessage("切换到垂直模式 (重力: 9.8)")
+        if not self.is_playing: self.capture_initial_state()
 
     def start_create_object(self, object_type, params):
         self.scene.set_pending_create(object_type, params)
@@ -264,8 +347,10 @@ class MainWindow(QMainWindow):
 
     def create_object_at(self, object_type, x, y, params):
         obj = None
-        name = params.get("name", f"{object_type}_{self.ball_counter}")
-        self.ball_counter += 1
+        name = params.get("name", "").strip()
+        if not name or name.lower() in ["ball", "block", "spring", "未命名"]:
+            name = self.get_next_default_name(object_type)
+        
         
         if object_type == "ball":
             obj = Ball(x=x, y=y, radius=params["radius"], mass=params["mass"], name=name)
@@ -289,8 +374,8 @@ class MainWindow(QMainWindow):
         if obj:
             self.engine.add_object(obj)
             self.scene.add_physics_object(obj)
-            if self.tracked_ball is None:
-                self.tracked_ball = obj
+            self.data_panel.refresh_objects(self.engine.objects)
+            if not self.is_playing: self.capture_initial_state()
             self.statusBar().showMessage(f"已创建: {name}")
         
         self.action_select.setChecked(True)
@@ -302,28 +387,30 @@ class MainWindow(QMainWindow):
                 obj = item.obj
                 self.engine.remove_object(obj)
                 self.scene.remove_physics_object(obj)
-                if self.tracked_ball == obj:
-                    self.tracked_ball = None
-                    self.time_data = []
-                    self.vel_data = []
-                    self.plot_curve.setData(self.time_data, self.vel_data)
+                self.recorder.remove_object(obj.id)
         self.property_panel.set_object(None)
+        self.data_panel.refresh_objects(self.engine.objects)
+        if not self.is_playing: self.capture_initial_state()
 
     def clear_scene(self):
         self.engine.clear()
         self.scene.clear_items()
+        self.recorder.clear_all()
         self.property_panel.set_object(None)
-        self.tracked_ball = None
-        self.time_data = []
-        self.vel_data = []
-        self.plot_curve.setData(self.time_data, self.vel_data)
+        self.data_panel.refresh_objects(self.engine.objects)
         self.ball_counter = 1
+        self.block_counter = 1
+        self.spring_counter = 1
+        if not self.is_playing: self.capture_initial_state()
 
     def on_object_selected(self, obj):
         self.property_panel.set_object(obj)
-        self.tracked_ball = obj
-
+        self.data_panel.select_object(obj)
+        
     def on_property_changed(self):
+        self.scene.update_items(playing=False)
+        self.data_panel.refresh_objects(self.engine.objects)
+        if not self.is_playing: self.capture_initial_state()
         obj = self.property_panel.current_obj
         if obj and obj in self.scene.items_dict:
             item = self.scene.items_dict[obj]
@@ -331,6 +418,7 @@ class MainWindow(QMainWindow):
                 item.update_appearance()
 
     def play_simulation(self):
+        if not self.is_playing: self.capture_initial_state()
         self.is_playing = True
         self.timer.start(16)
         self.statusBar().showMessage("仿真运行中...")
@@ -341,22 +429,12 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("仿真已暂停")
         
     def reset_simulation(self):
-        self.pause_simulation()
-        self.clear_scene()
-        self.time_data = []
-        self.vel_data = []
-        self.plot_curve.setData([], [])
+        self.restore_initial_state()
         self.statusBar().showMessage("重置完成")
         
     def update_simulation(self):
         dt = 0.016
         self.engine.step(dt)
         self.scene.update_items(record_trail=True, playing=True)
-        
-        if self.tracked_ball and not isinstance(self.tracked_ball, Spring):
-            self.time_data.append(self.engine.time)
-            self.vel_data.append(self.tracked_ball.vel[1])
-            if len(self.time_data) > 500:
-                self.time_data.pop(0)
-                self.vel_data.pop(0)
-            self.plot_curve.setData(self.time_data, self.vel_data)
+        self.recorder.record(self.engine.time, self.engine.objects, self.engine)
+        self.data_panel.update_plot()

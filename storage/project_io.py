@@ -3,7 +3,7 @@ import numpy as np
 from core.models import Ball, Block, Spring
 
 
-def save_project(path, engine, ball_counter, scene_data):
+def save_project(path, engine, counters, scene_data):
     data = {
         "engine": {
             "time": float(engine.time),
@@ -12,7 +12,7 @@ def save_project(path, engine, ball_counter, scene_data):
             "experiment_mode": scene_data.get("experiment_mode", "vertical"),
         },
         "scene": scene_data,
-        "ball_counter": ball_counter,
+        "counters": counters,
         "objects": []
     }
 
@@ -30,7 +30,8 @@ def load_project(path):
 
     engine_data = data.get("engine", {})
     scene_data  = data.get("scene", {"show_velocity_arrow": False, "show_trail": False})
-    ball_counter = data.get("ball_counter", 1)
+    
+    counters = data.get("counters", {"ball": data.get("ball_counter", 1), "block": 1, "spring": 1})
 
     # 若旧文件 scene 里没有 experiment_mode，根据 gravity 推断
     if "experiment_mode" not in scene_data:
@@ -47,4 +48,4 @@ def load_project(path):
         elif t == "spring":
             objects.append(Spring.from_state(obj_data))
 
-    return engine_data, objects, ball_counter, scene_data
+    return engine_data, objects, counters, scene_data
