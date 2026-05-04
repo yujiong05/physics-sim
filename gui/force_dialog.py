@@ -11,7 +11,7 @@ class ForceDialog(QDialog):
         
         self.sp_magnitude = QDoubleSpinBox()
         self.sp_magnitude.setRange(0, 1000000)
-        self.sp_magnitude.setValue(1000)
+        self.sp_magnitude.setValue(10.0)
         self.sp_magnitude.setSuffix(" N")
         
         self.sp_angle = QDoubleSpinBox()
@@ -26,7 +26,7 @@ class ForceDialog(QDialog):
         self.sp_duration.setSuffix(" s")
         self.sp_duration.setSingleStep(0.1)
         
-        form_layout.addRow("力的大小:", self.sp_magnitude)
+        form_layout.addRow("力的大小 (N):", self.sp_magnitude)
         form_layout.addRow("力的方向:", self.sp_angle)
         form_layout.addRow("", QLabel("<small>0=向右，90=向下，-90=向上</small>"))
         form_layout.addRow("持续时间:", self.sp_duration)

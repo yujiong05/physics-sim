@@ -85,13 +85,14 @@ class Block(PhysicalObject):
 
 class Spring:
     def __init__(self, start_pos, end_pos, stiffness=200.0, damping=5.0,
-                 rest_length=None, name="Spring", color="#ffa040"):
+                 rest_length=None, name="Spring", color="#ffa040", thickness=2):
         self.id = uuid.uuid4().hex
         self.name = name
         self.start_pos = np.array(start_pos, dtype=np.float64)
         self.end_pos   = np.array(end_pos,   dtype=np.float64)
         self.stiffness = stiffness
         self.damping   = damping
+        self.thickness = thickness
         if rest_length is None:
             rest_length = float(np.linalg.norm(self.end_pos - self.start_pos))
         self.rest_length = rest_length
@@ -246,3 +247,128 @@ class Groove:
         groove.acc = np.array(data.get("acc", [0.0, 0.0]), dtype=np.float64)
         groove.static = groove.fixed
         return groove
+
+class Rod:
+    def __init__(self, start_pos, end_pos, thickness=6, name="Rod"):
+        self.id = uuid.uuid4().hex
+        self.type = "rod"
+        self.name = name
+        self.start_pos = np.array(start_pos, dtype=np.float64)
+        self.end_pos = np.array(end_pos, dtype=np.float64)
+        self.thickness = thickness
+        self.mass = 1.0
+        self.color = "#a0a0a0"
+        self.damping = 0.0
+        self.friction = 0.0
+        
+        self.fixed_start = True
+        self.fixed_end = False
+        self.start_body_id = None
+        self.end_body_id = None
+        self.start_local_offset = np.array([0.0, 0.0], dtype=np.float64)
+        self.end_local_offset = np.array([0.0, 0.0], dtype=np.float64)
+        
+        self.length = np.linalg.norm(self.end_pos - self.start_pos)
+        self.static = True 
+
+    def get_state(self):
+        return {
+            "type": self.type,
+            "id": self.id,
+            "name": self.name,
+            "start_pos": self.start_pos.tolist(),
+            "end_pos": self.end_pos.tolist(),
+            "thickness": float(self.thickness),
+            "mass": float(self.mass),
+            "color": self.color,
+            "fixed_start": self.fixed_start,
+            "fixed_end": self.fixed_end,
+            "start_body_id": self.start_body_id,
+            "end_body_id": self.end_body_id,
+            "start_local_offset": self.start_local_offset.tolist(),
+            "end_local_offset": self.end_local_offset.tolist(),
+            "length": float(self.length),
+            "damping": float(self.damping),
+            "friction": float(self.friction)
+        }
+
+    @classmethod
+    def from_state(cls, data):
+        rod = cls(
+            start_pos=data.get("start_pos", [0.0, 0.0]),
+            end_pos=data.get("end_pos", [100.0, 0.0]),
+            thickness=data.get("thickness", 6),
+            name=data.get("name", "Rod")
+        )
+        rod.id = data.get("id", uuid.uuid4().hex)
+        rod.mass = data.get("mass", 1.0)
+        rod.color = data.get("color", "#a0a0a0")
+        rod.fixed_start = data.get("fixed_start", True)
+        rod.fixed_end = data.get("fixed_end", False)
+        rod.start_body_id = data.get("start_body_id")
+        rod.end_body_id = data.get("end_body_id")
+        rod.start_local_offset = np.array(data.get("start_local_offset", [0.0, 0.0]), dtype=np.float64)
+        rod.end_local_offset = np.array(data.get("end_local_offset", [0.0, 0.0]), dtype=np.float64)
+        rod.length = data.get("length", rod.length)
+        rod.damping = data.get("damping", 0.0)
+        rod.friction = data.get("friction", 0.0)
+        return rod
+
+class Rope:
+    def __init__(self, start_pos, end_pos, length=None, name="Rope"):
+        self.id = uuid.uuid4().hex
+        self.type = "rope"
+        self.name = name
+        self.start_pos = np.array(start_pos, dtype=np.float64)
+        self.end_pos = np.array(end_pos, dtype=np.float64)
+        self.length = length if length is not None else np.linalg.norm(self.end_pos - self.start_pos)
+        self.color = "#333333"
+        self.thickness = 3
+        self.damping = 0.2
+        
+        self.fixed_start = True
+        self.fixed_end = False
+        self.start_body_id = None
+        self.end_body_id = None
+        self.start_local_offset = np.array([0.0, 0.0], dtype=np.float64)
+        self.end_local_offset = np.array([0.0, 0.0], dtype=np.float64)
+        self.static = True
+
+    def get_state(self):
+        return {
+            "type": self.type,
+            "id": self.id,
+            "name": self.name,
+            "start_pos": self.start_pos.tolist(),
+            "end_pos": self.end_pos.tolist(),
+            "length": float(self.length),
+            "color": self.color,
+            "thickness": float(self.thickness),
+            "damping": float(self.damping),
+            "fixed_start": self.fixed_start,
+            "fixed_end": self.fixed_end,
+            "start_body_id": self.start_body_id,
+            "end_body_id": self.end_body_id,
+            "start_local_offset": self.start_local_offset.tolist(),
+            "end_local_offset": self.end_local_offset.tolist()
+        }
+
+    @classmethod
+    def from_state(cls, data):
+        rope = cls(
+            start_pos=data.get("start_pos", [0.0, 0.0]),
+            end_pos=data.get("end_pos", [100.0, 0.0]),
+            length=data.get("length"),
+            name=data.get("name", "Rope")
+        )
+        rope.id = data.get("id", uuid.uuid4().hex)
+        rope.color = data.get("color", "#333333")
+        rope.thickness = data.get("thickness", 3)
+        rope.damping = data.get("damping", 0.2)
+        rope.fixed_start = data.get("fixed_start", True)
+        rope.fixed_end = data.get("fixed_end", False)
+        rope.start_body_id = data.get("start_body_id")
+        rope.end_body_id = data.get("end_body_id")
+        rope.start_local_offset = np.array(data.get("start_local_offset", [0.0, 0.0]), dtype=np.float64)
+        rope.end_local_offset = np.array(data.get("end_local_offset", [0.0, 0.0]), dtype=np.float64)
+        return rope

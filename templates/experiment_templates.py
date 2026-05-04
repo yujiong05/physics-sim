@@ -2,6 +2,7 @@
 templates/experiment_templates.py
 预设实验模板，每个模板返回与 JSON 保存格式兼容的数据字典。
 """
+import math
 
 def _engine_defaults(gravity=None):
     return {
@@ -87,10 +88,52 @@ def _groove(id, name, x, y, radius, thickness, restitution=0.8, friction=0.1, fi
         "acc": [0.0, 0.0]
     }
 
+def _rod(id, name, start_pos, end_pos, thickness=6, mass=1.0, start_id=None, end_id=None):
+    return {
+        "id": id,
+        "type": "rod",
+        "name": name,
+        "start_pos": start_pos,
+        "end_pos": end_pos,
+        "thickness": float(thickness),
+        "mass": float(mass),
+        "color": "#a0a0a0",
+        "fixed_start": start_id is None,
+        "fixed_end": end_id is None,
+        "start_body_id": start_id,
+        "end_body_id": end_id,
+        "start_local_offset": [0.0, 0.0],
+        "end_local_offset": [0.0, 0.0],
+        "friction": 0.0,
+        "damping": 0.0,
+        "length": float(math.sqrt((end_pos[0]-start_pos[0])**2 + (end_pos[1]-start_pos[1])**2))
+    }
+
+def _rope(id, name, start_pos, end_pos, length=None, damping=0.2, start_id=None, end_id=None):
+    if length is None:
+        length = math.sqrt((end_pos[0]-start_pos[0])**2 + (end_pos[1]-start_pos[1])**2)
+    return {
+        "id": id,
+        "type": "rope",
+        "name": name,
+        "start_pos": start_pos,
+        "end_pos": end_pos,
+        "length": float(length),
+        "damping": float(damping),
+        "color": "#333333",
+        "thickness": 3.0,
+        "fixed_start": start_id is None,
+        "fixed_end": end_id is None,
+        "start_body_id": start_id,
+        "end_body_id": end_id,
+        "start_local_offset": [0.0, 0.0],
+        "end_local_offset": [0.0, 0.0]
+    }
+
 def tpl_free_fall():
     return {
         "name": "自由落体实验",
-        "description": "观察小球在重力作用下的位移、速度变化。",
+        "description": "观察小球在重力作用下的位移、速度变化。图表单位已按 100 px = 1 m 换算为 SI 单位。",
         "engine": _engine_defaults([0.0, 980.0]),
         "counters": {"ball": 2, "platform": 2},
         "scene": {
@@ -109,7 +152,7 @@ def tpl_free_fall():
 def tpl_projectile_motion():
     return {
         "name": "平抛运动实验",
-        "description": "观察水平速度不变、竖直方向受重力影响的抛物线轨迹。",
+        "description": "观察水平速度不变、竖直方向受重力影响的抛物线轨迹。图表单位已按 100 px = 1 m 换算为 SI 单位。",
         "engine": _engine_defaults([0.0, 980.0]),
         "counters": {"ball": 2, "platform": 2},
         "scene": {
@@ -239,6 +282,70 @@ def tpl_groove_ball():
         "preferred_observe_object": "ball1"
     }
 
+def tpl_double_pendulum():
+    b1_pos = [440, 300]
+    b2_pos = [510, 430]
+    return {
+        "name": "双摆实验",
+        "description": "观察由两根细棒连接的双摆耦合运动。",
+        "engine": _engine_defaults([0.0, 980.0]),
+        "counters": {"ball": 2, "rod": 2},
+        "scene": {
+            "experiment_mode": "vertical",
+            "show_velocity_arrow": True,
+            "show_trail": True
+        },
+        "objects": [
+            _ball("tpl_double_pendulum_ball1", "ball1", b1_pos[0], b1_pos[1], 120, 0, 18, 1.0, 0.8),
+            _ball("tpl_double_pendulum_ball2", "ball2", b2_pos[0], b2_pos[1], 0, 0, 18, 1.0, 0.8),
+            # rod1 连接固定点 [400, 150] 到 ball1
+            _rod("tpl_double_pendulum_rod1", "rod1", [400, 150], b1_pos, 4, 1.0, None, "tpl_double_pendulum_ball1"),
+            # rod2 连接 ball1 到 ball2
+            _rod("tpl_double_pendulum_rod2", "rod2", b1_pos, b2_pos, 4, 1.0, "tpl_double_pendulum_ball1", "tpl_double_pendulum_ball2")
+        ],
+        "preferred_observe_object": "ball2",
+        "preferred_curves": ["x", "y", "speed"]
+    }
+
+def tpl_newtons_cradle():
+    objs = []
+    anchor_y = 120
+    rope_length = 240
+    ball_radius = 18
+    rest_y = anchor_y + rope_length
+    
+    # 静止的小球 (ball2 - ball5)
+    x_static = [360, 396, 432, 468]
+    for i, x in enumerate(x_static):
+        bid = f"tpl_nc_ball{i+2}"
+        objs.append(_ball(bid, f"ball{i+2}", x, rest_y, 0, 0, ball_radius, 1.0, 0.98))
+        objs.append(_rope(f"tpl_nc_rope{i+2}", f"rope{i+2}", [x, anchor_y], [x, rest_y], rope_length, 0.05, None, bid))
+    
+    # 倾斜拉起的小球 (ball1)
+    anchor1_x = 324
+    angle_deg = -25
+    angle_rad = math.radians(angle_deg)
+    b1_x = anchor1_x + rope_length * math.sin(angle_rad)
+    b1_y = anchor_y + rope_length * math.cos(angle_rad)
+    
+    objs.append(_ball("tpl_nc_ball1", "ball1", b1_x, b1_y, 0, 0, ball_radius, 1.0, 0.98))
+    objs.append(_rope("tpl_nc_rope1", "rope1", [anchor1_x, anchor_y], [b1_x, b1_y], rope_length, 0.05, None, "tpl_nc_ball1"))
+    
+    return {
+        "name": "牛顿摆实验",
+        "description": "观察第一个小球从倾斜位置释放后，动量在等质量小球间传递。",
+        "engine": _engine_defaults([0.0, 980.0]),
+        "counters": {"ball": 6, "rope": 6},
+        "scene": {
+            "experiment_mode": "vertical",
+            "show_velocity_arrow": True,
+            "show_trail": True
+        },
+        "objects": objs,
+        "preferred_observe_object": "ball1",
+        "preferred_curves": ["vx", "speed", "kinetic_energy"]
+    }
+
 ALL_TEMPLATES = [
     tpl_free_fall,
     tpl_projectile_motion,
@@ -247,5 +354,7 @@ ALL_TEMPLATES = [
     tpl_inelastic_collision,
     tpl_spring_oscillator,
     tpl_spring_coupled,
-    tpl_groove_ball
+    tpl_groove_ball,
+    tpl_double_pendulum,
+    tpl_newtons_cradle
 ]

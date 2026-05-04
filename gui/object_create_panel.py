@@ -35,7 +35,7 @@ class ObjectCreatePanel(QWidget):
         create_layout = QVBoxLayout()
 
         self.cb_type = QComboBox()
-        self.cb_type.addItems(["小球", "方块", "弹簧", "平台", "挡板", "斜面", "凹槽"])
+        self.cb_type.addItems(["小球", "方块", "弹簧", "平台", "挡板", "斜面", "凹槽", "细棒", "绳子"])
         create_layout.addWidget(QLabel("对象类型:"))
         create_layout.addWidget(self.cb_type)
 
@@ -47,6 +47,8 @@ class ObjectCreatePanel(QWidget):
         self.spring_params = self.create_spring_form()
         self.static_params = self.create_static_form()
         self.groove_params = self.create_groove_form()
+        self.rod_params = self.create_rod_form()
+        self.rope_params = self.create_rope_form()
 
         self.param_stack.addWidget(self.ball_params)
         self.param_stack.addWidget(self.block_params)
@@ -55,13 +57,21 @@ class ObjectCreatePanel(QWidget):
         self.param_stack.addWidget(self.static_params) # 挡板
         self.param_stack.addWidget(self.static_params) # 斜面
         self.param_stack.addWidget(self.groove_params) # 凹槽
+        self.param_stack.addWidget(self.rod_params)    # 细棒
+        self.param_stack.addWidget(self.rope_params)   # 绳子
 
         create_layout.addWidget(self.param_stack)
         
         def on_type_changed(idx):
-            if idx == 6:
+            if idx == 6: # 凹槽
                 self.param_stack.setCurrentIndex(6)
                 self.groove_name.setText("")
+            elif idx == 7: # 细棒
+                self.param_stack.setCurrentIndex(7)
+                self.rod_name.setText("")
+            elif idx == 8: # 绳子
+                self.param_stack.setCurrentIndex(8)
+                self.rope_name.setText("")
             else:
                 self.param_stack.setCurrentIndex(min(idx, 3))
             # 自动调整静态物体表单提示
@@ -103,11 +113,11 @@ class ObjectCreatePanel(QWidget):
         self.ball_vx = QDoubleSpinBox(); self.ball_vx.setRange(-2000, 2000); self.ball_vx.setValue(0.0)
         self.ball_vy = QDoubleSpinBox(); self.ball_vy.setRange(-2000, 2000); self.ball_vy.setValue(0.0)
         l.addRow("名称:", self.ball_name)
-        l.addRow("质量:", self.ball_mass)
-        l.addRow("半径:", self.ball_radius)
+        l.addRow("质量 (kg):", self.ball_mass)
+        l.addRow("半径 (px):", self.ball_radius)
         l.addRow("弹性:", self.ball_restitution)
-        l.addRow("初速 X:", self.ball_vx)
-        l.addRow("初速 Y:", self.ball_vy)
+        l.addRow("初速 X (px/s):", self.ball_vx)
+        l.addRow("初速 Y (px/s):", self.ball_vy)
         return w
 
     def create_block_form(self):
@@ -122,12 +132,12 @@ class ObjectCreatePanel(QWidget):
         self.block_vx = QDoubleSpinBox(); self.block_vx.setRange(-2000, 2000); self.block_vx.setValue(0.0)
         self.block_vy = QDoubleSpinBox(); self.block_vy.setRange(-2000, 2000); self.block_vy.setValue(0.0)
         l.addRow("名称:", self.block_name)
-        l.addRow("质量:", self.block_mass)
-        l.addRow("宽度:", self.block_width)
-        l.addRow("高度:", self.block_height)
+        l.addRow("质量 (kg):", self.block_mass)
+        l.addRow("宽度 (px):", self.block_width)
+        l.addRow("高度 (px):", self.block_height)
         l.addRow("弹性:", self.block_restitution)
-        l.addRow("初速 X:", self.block_vx)
-        l.addRow("初速 Y:", self.block_vy)
+        l.addRow("初速 X (px/s):", self.block_vx)
+        l.addRow("初速 Y (px/s):", self.block_vy)
         return w
 
     def create_spring_form(self):
@@ -140,10 +150,10 @@ class ObjectCreatePanel(QWidget):
         self.spring_len = QDoubleSpinBox(); self.spring_len.setRange(1, 1000); self.spring_len.setValue(100.0)
         self.spring_angle = QDoubleSpinBox(); self.spring_angle.setRange(0, 360); self.spring_angle.setValue(0.0)
         l.addRow("名称:", self.spring_name)
-        l.addRow("劲度系数:", self.spring_k)
-        l.addRow("阻尼系数:", self.spring_d)
-        l.addRow("初始长度:", self.spring_len)
-        l.addRow("偏转角度:", self.spring_angle)
+        l.addRow("刚度 (k):", self.spring_k)
+        l.addRow("阻尼 (d):", self.spring_d)
+        l.addRow("静止长度 (px):", self.spring_len)
+        l.addRow("当前角度 (°):", self.spring_angle)
         return w
         
     def create_static_form(self):
@@ -157,11 +167,11 @@ class ObjectCreatePanel(QWidget):
         self.static_restitution = QDoubleSpinBox(); self.static_restitution.setRange(0, 1.1); self.static_restitution.setValue(0.8)
         self.static_friction = QDoubleSpinBox(); self.static_friction.setRange(0, 1.0); self.static_friction.setValue(0.2)
         l.addRow("名称:", self.static_name)
-        l.addRow("宽度:", self.static_width)
-        l.addRow("高度:", self.static_height)
-        l.addRow("旋转角度:", self.static_angle)
-        l.addRow("弹性:", self.static_restitution)
-        l.addRow("摩擦力:", self.static_friction)
+        l.addRow("宽度 (px):", self.static_width)
+        l.addRow("高度 (px):", self.static_height)
+        l.addRow("角度 (°):", self.static_angle)
+        l.addRow("弹性系数:", self.static_restitution)
+        l.addRow("摩擦系数:", self.static_friction)
         return w
 
     def create_groove_form(self):
@@ -181,14 +191,14 @@ class ObjectCreatePanel(QWidget):
         self.groove_friction = QDoubleSpinBox(); self.groove_friction.setRange(0, 1.0); self.groove_friction.setValue(0.2)
         
         l.addRow("名称:", self.groove_name)
-        l.addRow("半径:", self.groove_radius)
-        l.addRow("厚度:", self.groove_thickness)
+        l.addRow("半径 (px):", self.groove_radius)
+        l.addRow("厚度 (px):", self.groove_thickness)
         l.addRow("是否固定:", self.groove_fixed)
-        l.addRow("质量:", self.groove_mass)
-        l.addRow("初速度 VX:", self.groove_vx)
-        l.addRow("初速度 VY:", self.groove_vy)
-        l.addRow("弹性:", self.groove_restitution)
-        l.addRow("摩擦力:", self.groove_friction)
+        l.addRow("质量 (kg):", self.groove_mass)
+        l.addRow("初速 X (px/s):", self.groove_vx)
+        l.addRow("初速 Y (px/s):", self.groove_vy)
+        l.addRow("弹性系数:", self.groove_restitution)
+        l.addRow("摩擦系数:", self.groove_friction)
         
         # 联动控制
         def toggle_fixed():
@@ -199,6 +209,44 @@ class ObjectCreatePanel(QWidget):
         self.groove_fixed.toggled.connect(toggle_fixed)
         toggle_fixed() # 初始化
         
+        return w
+
+    def create_rod_form(self):
+        w = QWidget()
+        l = QFormLayout(w)
+        self.rod_name = QLineEdit("")
+        self.rod_name.setPlaceholderText("留空自动生成")
+        self.rod_len = QDoubleSpinBox(); self.rod_len.setRange(1, 2000); self.rod_len.setValue(160.0)
+        self.rod_angle = QDoubleSpinBox(); self.rod_angle.setRange(-360, 360); self.rod_angle.setValue(90.0)
+        self.rod_thickness = QDoubleSpinBox(); self.rod_thickness.setRange(1, 100); self.rod_thickness.setValue(6.0)
+        self.rod_mass = QDoubleSpinBox(); self.rod_mass.setRange(0.1, 1000); self.rod_mass.setValue(1.0)
+        self.rod_friction = QDoubleSpinBox(); self.rod_friction.setRange(0, 1); self.rod_friction.setValue(0.0)
+        
+        l.addRow("名称:", self.rod_name)
+        l.addRow("长度 (px):", self.rod_len)
+        l.addRow("角度 (°):", self.rod_angle)
+        l.addRow("厚度 (px):", self.rod_thickness)
+        l.addRow("质量 (kg):", self.rod_mass)
+        l.addRow("摩擦系数:", self.rod_friction)
+        return w
+
+    def create_rope_form(self):
+        w = QWidget()
+        l = QFormLayout(w)
+        self.rope_name = QLineEdit("")
+        self.rope_name.setPlaceholderText("留空自动生成")
+        self.rope_len = QDoubleSpinBox(); self.rope_len.setRange(1, 2000); self.rope_len.setValue(180.0)
+        self.rope_angle = QDoubleSpinBox(); self.rope_angle.setRange(-360, 360); self.rope_angle.setValue(90.0)
+        self.rope_damping = QDoubleSpinBox(); self.rope_damping.setRange(0, 10); self.rope_damping.setValue(0.2)
+        self.rope_thickness = QDoubleSpinBox(); self.rope_thickness.setRange(1, 20); self.rope_thickness.setValue(3.0)
+        self.rope_color = QLineEdit("#333333")
+        
+        l.addRow("名称:", self.rope_name)
+        l.addRow("长度 (px):", self.rope_len)
+        l.addRow("角度 (°):", self.rope_angle)
+        l.addRow("阻尼 (d):", self.rope_damping)
+        l.addRow("线宽 (px):", self.rope_thickness)
+        l.addRow("颜色:", self.rope_color)
         return w
 
     def on_create_clicked(self):
@@ -263,5 +311,26 @@ class ObjectCreatePanel(QWidget):
                 "restitution": self.groove_restitution.value(),
                 "friction": self.groove_friction.value(),
                 "color": "#808080"
+            }
+        elif idx == 7: # Rod
+            obj_type = "rod"
+            params = {
+                "name": self.rod_name.text(),
+                "length": self.rod_len.value(),
+                "angle": self.rod_angle.value(),
+                "thickness": self.rod_thickness.value(),
+                "mass": self.rod_mass.value(),
+                "friction": self.rod_friction.value(),
+                "color": "#333333"
+            }
+        elif idx == 8: # Rope
+            obj_type = "rope"
+            params = {
+                "name": self.rope_name.text(),
+                "length": self.rope_len.value(),
+                "angle": self.rope_angle.value(),
+                "damping": self.rope_damping.value(),
+                "thickness": self.rope_thickness.value(),
+                "color": self.rope_color.text()
             }
         self.create_requested.emit(obj_type, params)

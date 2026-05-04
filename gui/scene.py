@@ -170,16 +170,16 @@ class GrooveItem(QGraphicsPathItem):
 
 
 # ─────────────────────────────────────────────────────────
-# SpringItem 及其手柄
+# 端点手柄 (用于 Spring, Rod, Rope)
 # ─────────────────────────────────────────────────────────
 class EndpointHandle(QGraphicsEllipseItem):
-    def __init__(self, spring_item, is_start=True):
+    def __init__(self, owner_item, is_start=True):
         super().__init__(-8, -8, 16, 16)
-        self.spring_item = spring_item
+        self.owner_item = owner_item
         self.is_start = is_start
         self._is_internal_updating = False
         
-        self.setBrush(QBrush(QColor(255, 255, 255)))
+        self.setBrush(QBrush(Qt.white))
         self.setPen(QPen(Qt.black, 1))
         self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemSendsGeometryChanges | QGraphicsItem.ItemIsSelectable)
         self.setZValue(40)
@@ -187,31 +187,29 @@ class EndpointHandle(QGraphicsEllipseItem):
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionHasChanged and not self._is_internal_updating:
-            bound_id = self.spring_item.obj.start_body_id if self.is_start else self.spring_item.obj.end_body_id
+            bound_id = self.owner_item.obj.start_body_id if self.is_start else self.owner_item.obj.end_body_id
             if not bound_id:
                 new_pos = self.pos()
                 if self.is_start:
-                    self.spring_item.obj.start_pos = np.array([new_pos.x(), new_pos.y()])
+                    self.owner_item.obj.start_pos = np.array([new_pos.x(), new_pos.y()])
                 else:
-                    self.spring_item.obj.end_pos = np.array([new_pos.x(), new_pos.y()])
-                self.spring_item.rebuild_path()
+                    self.owner_item.obj.end_pos = np.array([new_pos.x(), new_pos.y()])
+                self.owner_item.rebuild_path()
         return super().itemChange(change, value)
 
     def mousePressEvent(self, event):
         scene = self.scene()
         if not scene: return
         
-        # 1. 点击逻辑：进入/退出挂载模式
-        my_id = (self.spring_item, self.is_start)
+        my_id = (self.owner_item, self.is_start)
         current_mounting = getattr(scene, 'mounting_endpoint', None)
         
         if current_mounting == my_id:
             scene.cancel_mounting()
         else:
-            scene.start_mounting(self.spring_item, self.is_start)
+            scene.start_mounting(self.owner_item, self.is_start)
         
-        # 2. 如果已绑定，禁止拖动
-        bound_id = self.spring_item.obj.start_body_id if self.is_start else self.spring_item.obj.end_body_id
+        bound_id = self.owner_item.obj.start_body_id if self.is_start else self.owner_item.obj.end_body_id
         if bound_id:
             event.accept()
             return
@@ -219,10 +217,19 @@ class EndpointHandle(QGraphicsEllipseItem):
         super().mousePressEvent(event)
 
     def mouseDoubleClickEvent(self, event):
-        if self.is_start: self.spring_item.obj.start_body_id = None
-        else: self.spring_item.obj.end_body_id = None
-        self.spring_item.rebuild_path()
+        if self.is_start: self.owner_item.obj.start_body_id = None
+        else: self.owner_item.obj.end_body_id = None
+        self.owner_item.rebuild_path()
         event.accept()
+
+    def update_status(self, is_mounting_this):
+        bound_id = self.owner_item.obj.start_body_id if self.is_start else self.owner_item.obj.end_body_id
+        if is_mounting_this:
+            self.setBrush(QBrush(Qt.yellow))
+        elif bound_id:
+            self.setBrush(QBrush(Qt.red))
+        else:
+            self.setBrush(QBrush(Qt.white))
 
 
 class SpringItem(QGraphicsPathItem):
@@ -240,9 +247,25 @@ class SpringItem(QGraphicsPathItem):
         self.start_handle = EndpointHandle(self, is_start=True)
         self.end_handle = EndpointHandle(self, is_start=False)
 
+    def update_handle_states(self):
+        scene = self.scene()
+        mounting = getattr(scene, 'mounting_endpoint', None)
+        self.start_handle.update_status(mounting == (self, True))
+        self.end_handle.update_status(mounting == (self, False))
+
     def rebuild_path(self):
         p1 = QPointF(self.obj.start_pos[0], self.obj.start_pos[1])
         p2 = QPointF(self.obj.end_pos[0], self.obj.end_pos[1])
+        
+        self.start_handle._is_internal_updating = True
+        self.start_handle.setPos(p1)
+        self.start_handle._is_internal_updating = False
+        
+        self.end_handle._is_internal_updating = True
+        self.end_handle.setPos(p2)
+        self.end_handle._is_internal_updating = False
+        
+        self.update_handle_states()
         
         dx, dy = p2.x() - p1.x(), p2.y() - p1.y()
         length = math.sqrt(dx*dx + dy*dy) or 1.0
@@ -316,6 +339,128 @@ class SpringItem(QGraphicsPathItem):
         return super().itemChange(change, value)
 
 
+class RodItem(QGraphicsPathItem):
+    def __init__(self, obj, parent=None):
+        super().__init__(parent)
+        self.obj = obj
+        self.setPen(QPen(Qt.black, 1))
+        self.setBrush(QBrush(QColor(obj.color)))
+        self.setZValue(25)
+        self.setFlags(QGraphicsItem.ItemIsSelectable)
+        
+        self.start_handle = EndpointHandle(self, is_start=True)
+        self.end_handle = EndpointHandle(self, is_start=False)
+        self.rebuild_path()
+
+    def update_handle_states(self):
+        scene = self.scene()
+        mounting = getattr(scene, 'mounting_endpoint', None) if scene else None
+        is_selected = self.isSelected()
+        for h in [self.start_handle, self.end_handle]:
+            h.update_status(mounting == (self, h.is_start))
+            h.setVisible(is_selected or (mounting == (self, h.is_start)) or h.isSelected())
+
+    def rebuild_path(self):
+        p1 = QPointF(self.obj.start_pos[0], self.obj.start_pos[1])
+        p2 = QPointF(self.obj.end_pos[0], self.obj.end_pos[1])
+        
+        self.start_handle._is_internal_updating = True
+        self.start_handle.setPos(p1)
+        self.start_handle._is_internal_updating = False
+        
+        self.end_handle._is_internal_updating = True
+        self.end_handle.setPos(p2)
+        self.end_handle._is_internal_updating = False
+        
+        dx, dy = p2.x() - p1.x(), p2.y() - p1.y()
+        dist = math.sqrt(dx*dx + dy*dy) or 1.0
+        
+        path = QPainterPath()
+        t = self.obj.thickness / 2
+        nx, ny = -dy/dist * t, dx/dist * t
+        path.moveTo(p1.x() + nx, p1.y() + ny)
+        path.lineTo(p2.x() + nx, p2.y() + ny)
+        path.lineTo(p2.x() - nx, p2.y() - ny)
+        path.lineTo(p1.x() - nx, p1.y() - ny)
+        path.closeSubpath()
+        self.setPath(path)
+        self.update_handle_states()
+
+    def update_appearance(self, playing=False):
+        if playing: self.sync_bound_endpoints()
+        self.rebuild_path()
+
+    def sync_bound_endpoints(self):
+        scene = self.scene()
+        if not scene: return
+        id_map = scene.get_id_map()
+        if self.obj.start_body_id in id_map:
+            self.obj.start_pos = id_map[self.obj.start_body_id].pos + self.obj.start_local_offset
+        if self.obj.end_body_id in id_map:
+            self.obj.end_pos = id_map[self.obj.end_body_id].pos + self.obj.end_local_offset
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemSelectedHasChanged:
+            self.update_handle_states()
+        return super().itemChange(change, value)
+
+class RopeItem(QGraphicsPathItem):
+    def __init__(self, obj, parent=None):
+        super().__init__(parent)
+        self.obj = obj
+        self.setPen(QPen(QColor(obj.color), obj.thickness))
+        self.setZValue(28)
+        self.setFlags(QGraphicsItem.ItemIsSelectable)
+        
+        self.start_handle = EndpointHandle(self, is_start=True)
+        self.end_handle = EndpointHandle(self, is_start=False)
+        self.rebuild_path()
+
+    def update_handle_states(self):
+        scene = self.scene()
+        mounting = getattr(scene, 'mounting_endpoint', None) if scene else None
+        is_selected = self.isSelected()
+        for h in [self.start_handle, self.end_handle]:
+            h.update_status(mounting == (self, h.is_start))
+            h.setVisible(is_selected or (mounting == (self, h.is_start)) or h.isSelected())
+
+    def rebuild_path(self):
+        p1 = QPointF(self.obj.start_pos[0], self.obj.start_pos[1])
+        p2 = QPointF(self.obj.end_pos[0], self.obj.end_pos[1])
+        
+        self.start_handle._is_internal_updating = True
+        self.start_handle.setPos(p1)
+        self.start_handle._is_internal_updating = False
+        
+        self.end_handle._is_internal_updating = True
+        self.end_handle.setPos(p2)
+        self.end_handle._is_internal_updating = False
+        
+        path = QPainterPath()
+        path.moveTo(p1)
+        path.lineTo(p2)
+        self.setPath(path)
+        self.update_handle_states()
+
+    def update_appearance(self, playing=False):
+        if playing: self.sync_bound_endpoints()
+        self.rebuild_path()
+
+    def sync_bound_endpoints(self):
+        scene = self.scene()
+        if not scene: return
+        id_map = scene.get_id_map()
+        if self.obj.start_body_id in id_map:
+            self.obj.start_pos = id_map[self.obj.start_body_id].pos + self.obj.start_local_offset
+        if self.obj.end_body_id in id_map:
+            self.obj.end_pos = id_map[self.obj.end_body_id].pos + self.obj.end_local_offset
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemSelectedHasChanged:
+            self.update_handle_states()
+        return super().itemChange(change, value)
+
+
 # ─────────────────────────────────────────────────────────
 # PhysicsScene
 # ─────────────────────────────────────────────────────────
@@ -364,8 +509,8 @@ class PhysicsScene(QGraphicsScene):
         if selected:
             item = selected[0]
             if isinstance(item, EndpointHandle): 
-                self.object_selected.emit(item.spring_item.obj)
-                item.spring_item.update_handle_states()
+                self.object_selected.emit(item.owner_item.obj)
+                item.owner_item.update_handle_states()
             elif hasattr(item, 'obj'): self.object_selected.emit(item.obj)
         else: self.object_selected.emit(None)
 
@@ -374,8 +519,8 @@ class PhysicsScene(QGraphicsScene):
         while current:
             if hasattr(current, 'obj') and current.obj is not None:
                 return current, current.obj
-            if hasattr(current, 'spring_item'):
-                return current.spring_item, current.spring_item.obj
+            if hasattr(current, 'owner_item'):
+                return current.owner_item, current.owner_item.obj
             current = current.parentItem()
         return None, None
 
@@ -424,25 +569,25 @@ class PhysicsScene(QGraphicsScene):
             target_obj = None
             hit_handle = False
             for item in items:
-                if isinstance(item, (BallItem, BlockItem)):
+                if isinstance(item, (BallItem, BlockItem, StaticBlockItem, GrooveItem)):
                     target_obj = item.obj
                     break
                 if isinstance(item, EndpointHandle):
                     hit_handle = True
             
             if target_obj:
-                spring_item, is_start = self.mounting_endpoint
+                owner_item, is_start = self.mounting_endpoint
                 if is_start:
-                    spring_item.obj.start_body_id = target_obj.id
-                    spring_item.obj.start_local_offset = np.array([0.0, 0.0])
-                    spring_item.obj.start_pos = target_obj.pos.copy()
+                    owner_item.obj.start_body_id = target_obj.id
+                    owner_item.obj.start_local_offset = np.array([0.0, 0.0])
+                    owner_item.obj.start_pos = target_obj.pos.copy()
                 else:
-                    spring_item.obj.end_body_id = target_obj.id
-                    spring_item.obj.end_local_offset = np.array([0.0, 0.0])
-                    spring_item.obj.end_pos = target_obj.pos.copy()
+                    owner_item.obj.end_body_id = target_obj.id
+                    owner_item.obj.end_local_offset = np.array([0.0, 0.0])
+                    owner_item.obj.end_pos = target_obj.pos.copy()
                 
                 self.cancel_mounting()
-                spring_item.rebuild_path()
+                owner_item.rebuild_path()
                 event.accept()
                 return
             elif not hit_handle:
@@ -496,6 +641,22 @@ class PhysicsScene(QGraphicsScene):
             self.addItem(item)
             self.items_dict[obj] = item
             return
+        elif getattr(obj, "type", "") == "rod":
+            item = RodItem(obj)
+            self.addItem(item)
+            self.addItem(item.start_handle)
+            self.addItem(item.end_handle)
+            self.items_dict[obj] = item
+            item.rebuild_path()
+            return
+        elif getattr(obj, "type", "") == "rope":
+            item = RopeItem(obj)
+            self.addItem(item)
+            self.addItem(item.start_handle)
+            self.addItem(item.end_handle)
+            self.items_dict[obj] = item
+            item.rebuild_path()
+            return
         else: return
         item.set_show_velocity_arrow(self.show_velocity_arrow)
         item.set_show_trail(self.show_trail)
@@ -507,7 +668,7 @@ class PhysicsScene(QGraphicsScene):
         if obj not in self.items_dict: 
             return
         item = self.items_dict.pop(obj)
-        if isinstance(item, SpringItem):
+        if isinstance(item, (SpringItem, RodItem, RopeItem)):
             if item.start_handle.scene() == self:
                 self.removeItem(item.start_handle)
             if item.end_handle.scene() == self:
@@ -519,7 +680,7 @@ class PhysicsScene(QGraphicsScene):
 
     def update_items(self, record_trail=False, playing=False):
         for obj, item in self.items_dict.items():
-            if isinstance(item, SpringItem):
+            if isinstance(item, (SpringItem, RodItem, RopeItem)):
                 item.update_appearance(playing=playing)
                 continue
             elif isinstance(item, StaticBlockItem):

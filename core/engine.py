@@ -2,6 +2,7 @@ import numpy as np
 from core.models import Ball, Spring
 from core.collision import detect_and_resolve
 from core.force import AppliedForce
+from core.constraints import apply_rope_constraints, apply_rod_constraints
 
 class PhysicsEngine:
     def __init__(self):
@@ -49,6 +50,11 @@ class PhysicsEngine:
         for obj in self.objects:
             if isinstance(obj, Spring):
                 self._apply_spring_physics(obj, id_map)
+            elif getattr(obj, "type", "") == "rod":
+                self._update_rod_endpoints(obj, id_map)
+            elif getattr(obj, "type", "") == "rope":
+                # Rope endpoints will be updated inside apply_rope_constraints
+                pass
                 
         # 处理临时外力
         active_forces = []
@@ -71,9 +77,17 @@ class PhysicsEngine:
             # 5. 边界碰撞检测
             self._handle_boundary_collision(obj)
 
-        # 6. 物体间碰撞检测与响应
+        # 6. 应用约束 (位置和速度投影)
+        apply_rope_constraints(self.objects, id_map)
+        apply_rod_constraints(self.objects, id_map)
+
+        # 7. 物体间碰撞检测与响应
         rigid_bodies = [o for o in self.objects if not isinstance(o, Spring)]
         detect_and_resolve(rigid_bodies)
+        
+        # 8. 再次应用约束以修正碰撞引起的位移
+        apply_rope_constraints(self.objects, id_map)
+        apply_rod_constraints(self.objects, id_map)
 
     def _apply_spring_physics(self, spring, id_map):
         # 根据绑定更新端点坐标
@@ -134,7 +148,7 @@ class PhysicsEngine:
                 obj.pos[0] = self.bounds[2] - obj.radius
                 obj.vel[0] = -obj.vel[0] * obj.restitution
         else:
-            from core.models import Block
+            from core.models import Block, Groove
             if isinstance(obj, Block):
                 half_w = obj.width / 2.0
                 half_h = obj.height / 2.0
@@ -150,21 +164,17 @@ class PhysicsEngine:
                 if obj.pos[0] + half_w > self.bounds[2]:
                     obj.pos[0] = self.bounds[2] - half_w
                     obj.vel[0] = -obj.vel[0] * obj.restitution
-            
-            from core.models import Groove
-            if isinstance(obj, Groove):
-                half_w = obj.radius + obj.thickness
+            elif isinstance(obj, Groove):
                 # 底部边缘是圆心 y + 半径 + 厚度
-                h = obj.radius + obj.thickness
-                if obj.pos[1] + h > self.bounds[3]:
-                    obj.pos[1] = self.bounds[3] - h
+                h_total = obj.radius + obj.thickness
+                if obj.pos[1] + h_total > self.bounds[3]:
+                    obj.pos[1] = self.bounds[3] - h_total
                     obj.vel[1] = -obj.vel[1] * obj.restitution
-                if obj.pos[1] - h < self.bounds[1]:
-                    obj.pos[1] = self.bounds[1] + h
-                    obj.vel[1] = -obj.vel[1] * obj.restitution
-                if obj.pos[0] - half_w < self.bounds[0]:
-                    obj.pos[0] = self.bounds[0] + half_w
-                    obj.vel[0] = -obj.vel[0] * obj.restitution
-                if obj.pos[0] + half_w > self.bounds[2]:
-                    obj.pos[0] = self.bounds[2] - half_w
-                    obj.vel[0] = -obj.vel[0] * obj.restitution
+
+    def _update_rod_endpoints(self, rod, id_map):
+        if rod.start_body_id in id_map:
+            body1 = id_map[rod.start_body_id]
+            rod.start_pos = body1.pos + rod.start_local_offset
+        if rod.end_body_id in id_map:
+            body2 = id_map[rod.end_body_id]
+            rod.end_pos = body2.pos + rod.end_local_offset

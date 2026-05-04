@@ -9,7 +9,7 @@ import math
 
 from gui.scene import PhysicsScene
 from core.engine import PhysicsEngine
-from core.models import Ball, Block, Spring, StaticBlock, Groove
+from core.models import Ball, Block, Spring, StaticBlock, Groove, Rod, Rope
 from gui.property_panel import PropertyPanel
 from gui.object_create_panel import ObjectCreatePanel
 from gui.data_panel import DataPanel
@@ -37,6 +37,8 @@ class MainWindow(QMainWindow):
         self.wall_counter = 1
         self.ramp_counter = 1
         self.groove_counter = 1
+        self.rod_counter = 1
+        self.rope_counter = 1
         self.initial_state_snapshot = None
         self.current_file_path = None
 
@@ -48,9 +50,9 @@ class MainWindow(QMainWindow):
         
     def update_name_counters_from_scene(self):
         import re
-        max_c = {"ball":0, "block":0, "spring":0, "platform":0, "wall":0, "ramp":0, "groove":0}
+        max_c = {"ball":0, "block":0, "spring":0, "platform":0, "wall":0, "ramp":0, "groove":0, "rod":0, "rope":0}
         for obj in self.engine.objects:
-            m = re.match(r'(ball|block|spring|platform|wall|ramp|groove)(\d+)', obj.name.lower())
+            m = re.match(r'(ball|block|spring|platform|wall|ramp|groove|rod|rope)(\d+)', obj.name.lower())
             if m:
                 typ, num = m.groups()
                 num = int(num)
@@ -62,6 +64,8 @@ class MainWindow(QMainWindow):
         self.wall_counter = max(self.wall_counter, max_c["wall"] + 1)
         self.ramp_counter = max(self.ramp_counter, max_c["ramp"] + 1)
         self.groove_counter = max(self.groove_counter, max_c["groove"] + 1)
+        self.rod_counter = max(self.rod_counter, max_c["rod"] + 1)
+        self.rope_counter = max(self.rope_counter, max_c["rope"] + 1)
         
     def get_next_default_name(self, object_type):
         if object_type == "ball":
@@ -85,6 +89,12 @@ class MainWindow(QMainWindow):
         elif object_type == "groove":
             name = f"groove{self.groove_counter}"
             self.groove_counter += 1
+        elif object_type == "rod":
+            name = f"rod{self.rod_counter}"
+            self.rod_counter += 1
+        elif object_type == "rope":
+            name = f"rope{self.rope_counter}"
+            self.rope_counter += 1
         else:
             name = f"{object_type}_1"
         return name
@@ -119,6 +129,8 @@ class MainWindow(QMainWindow):
             elif t == "spring": objects.append(Spring.from_state(obj_data))
             elif t == "static_block": objects.append(StaticBlock.from_state(obj_data))
             elif t == "groove": objects.append(Groove.from_state(obj_data))
+            elif t == "rod": objects.append(Rod.from_state(obj_data))
+            elif t == "rope": objects.append(Rope.from_state(obj_data))
             
         for obj in objects:
             self.engine.add_object(obj)
@@ -192,6 +204,8 @@ class MainWindow(QMainWindow):
             elif t == "spring": objects.append(Spring.from_state(obj_data))
             elif t == "static_block": objects.append(StaticBlock.from_state(obj_data))
             elif t == "groove": objects.append(Groove.from_state(obj_data))
+            elif t == "rod": objects.append(Rod.from_state(obj_data))
+            elif t == "rope": objects.append(Rope.from_state(obj_data))
 
         self.apply_project_data(engine_data, objects, counters, scene_data)
         self.current_file_path = None
@@ -442,6 +456,27 @@ class MainWindow(QMainWindow):
             obj.friction = params["friction"]
             obj.color = params["color"]
             objects_to_add.append(obj)
+        elif object_type == "rod":
+            length = params["length"]
+            angle_rad = math.radians(params["angle"])
+            end_x = x + length * math.cos(angle_rad)
+            end_y = y + length * math.sin(angle_rad)
+            obj = Rod(start_pos=[x, y], end_pos=[end_x, end_y], 
+                      thickness=params["thickness"], name=name)
+            obj.mass = params["mass"]
+            obj.color = params["color"]
+            obj.friction = params.get("friction", 0.0)
+            objects_to_add.append(obj)
+        elif object_type == "rope":
+            length = params["length"]
+            angle_rad = math.radians(params["angle"])
+            end_x = x + length * math.cos(angle_rad)
+            end_y = y + length * math.sin(angle_rad)
+            obj = Rope(start_pos=[x, y], end_pos=[end_x, end_y], 
+                       length=length, name=name)
+            obj.damping = params["damping"]
+            obj.color = params["color"]
+            objects_to_add.append(obj)
         
         if objects_to_add:
             for obj in objects_to_add:
@@ -497,9 +532,11 @@ class MainWindow(QMainWindow):
             
         dialog = ForceDialog(self)
         if dialog.exec_() == QDialog.Accepted:
-            magnitude, angle_deg, duration = dialog.get_values()
-            self.engine.add_force(obj.id, magnitude, angle_deg, duration)
-            self.statusBar().showMessage(f"已对 {obj.name} 施加 {magnitude}N，方向 {angle_deg}°，持续 {duration}s")
+            from core.units import newton_to_internal_force
+            magnitude_newton, angle_deg, duration = dialog.get_values()
+            internal_magnitude = newton_to_internal_force(magnitude_newton)
+            self.engine.add_force(obj.id, internal_magnitude, angle_deg, duration)
+            self.statusBar().showMessage(f"已对 {obj.name} 施加 {magnitude_newton} N，方向 {angle_deg}°，持续 {duration} s")
 
     def clear_scene(self):
         self.engine.clear()
@@ -549,5 +586,5 @@ class MainWindow(QMainWindow):
         dt = 0.016
         self.engine.step(dt)
         self.scene.update_items(record_trail=True, playing=True)
-        self.recorder.record(self.engine.time, self.engine.objects, self.engine)
+        self.recorder.record(self.engine.time, self.engine.objects, self.engine, dt=dt)
         self.data_panel.update_plot()

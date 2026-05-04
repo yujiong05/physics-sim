@@ -1,6 +1,6 @@
 import json
 import numpy as np
-from core.models import Ball, Block, Spring, StaticBlock, Groove
+from core.models import Ball, Block, Spring, StaticBlock, Groove, Rod, Rope
 
 
 def save_project(path, engine, counters, scene_data):
@@ -51,5 +51,9 @@ def load_project(path):
             objects.append(StaticBlock.from_state(obj_data))
         elif t == "groove":
             objects.append(Groove.from_state(obj_data))
+        elif t == "rod":
+            objects.append(Rod.from_state(obj_data))
+        elif t == "rope":
+            objects.append(Rope.from_state(obj_data))
 
     return engine_data, objects, counters, scene_data

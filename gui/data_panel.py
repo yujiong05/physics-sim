@@ -5,6 +5,23 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox,
 from PyQt5.QtCore import Qt
 from core.models import Ball, Block, Spring
 
+FIELD_UNITS = {
+    "x": "x (m)",
+    "y": "y (m)",
+    "vx": "vx (m/s)",
+    "vy": "vy (m/s)",
+    "speed": "speed (m/s)",
+    "ax": "ax eff. (m/s²)",
+    "ay": "ay eff. (m/s²)",
+    "kinetic_energy": "kinetic energy (J)",
+    "potential_energy": "potential energy (J)",
+    "current_length": "length (m)",
+    "rest_length": "rest length (m)",
+    "extension": "extension (m)",
+    "spring_energy": "spring energy (J)",
+    "time": "time (s)"
+}
+
 class DataPanel(QWidget):
     def __init__(self, recorder, parent=None):
         super().__init__(parent)
@@ -15,6 +32,11 @@ class DataPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         
+        # 顶部提示
+        tip = QLabel("显示单位：100 px = 1 m；图表已自动换算为 SI 单位。")
+        tip.setStyleSheet("color: #666; font-size: 10px;")
+        layout.addWidget(tip)
+
         # 1. 观测对象选择
         h_layout1 = QHBoxLayout()
         h_layout1.addWidget(QLabel("观测对象:"))
@@ -41,6 +63,7 @@ class DataPanel(QWidget):
         self.plot_widget.setBackground('w')
         self.plot_widget.addLegend()
         self.plot_widget.showGrid(x=True, y=True)
+        self.plot_widget.setLabel('bottom', 'Time (s)')
         layout.addWidget(self.plot_widget)
         
         # 4. 按钮
@@ -61,7 +84,8 @@ class DataPanel(QWidget):
         self.cb_objects.clear()
         
         new_idx = -1
-        filtered_objects = [obj for obj in objects if getattr(obj, "type", "") != "static_block"]
+        # 过滤静态物体
+        filtered_objects = [obj for obj in objects if getattr(obj, "type", "") not in ["static_block", "wall", "ramp", "platform"]]
         for i, obj in enumerate(filtered_objects):
             name = obj.name
             self.cb_objects.addItem(name, obj)
@@ -116,7 +140,8 @@ class DataPanel(QWidget):
             
         row, col = 0, 0
         for field in fields:
-            cb = QCheckBox(field)
+            display_name = FIELD_UNITS.get(field, field)
+            cb = QCheckBox(display_name)
             cb.setChecked(field in default_fields)
             cb.stateChanged.connect(self.update_plot)
             self.checkbox_layout.addWidget(cb, row, col)
@@ -147,9 +172,19 @@ class DataPanel(QWidget):
             
         try:
             with open(path, 'w', newline='', encoding='utf-8-sig') as f:
-                writer = csv.DictWriter(f, fieldnames=data[0].keys())
-                writer.writeheader()
-                writer.writerows(data)
+                raw_fieldnames = list(data[0].keys())
+                # 带单位的表头
+                display_headers = [FIELD_UNITS.get(fn, fn) for fn in raw_fieldnames]
+                
+                writer = csv.DictWriter(f, fieldnames=raw_fieldnames)
+                # 手动写入带单位的表头
+                f.write(",".join(display_headers) + "\n")
+                
+                for row in data:
+                    # 保留 4 位小数
+                    formatted_row = {k: round(v, 4) if isinstance(v, (float, int)) else v for k, v in row.items()}
+                    writer.writerow(formatted_row)
+                    
             QMessageBox.information(self, "提示", "导出成功")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"导出失败: {e}")
@@ -166,9 +201,20 @@ class DataPanel(QWidget):
         colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
         color_idx = 0
         
+        active_fields = []
         for field, cb in self.checkboxes.items():
             if cb.isChecked():
+                active_fields.append(field)
                 values = [d[field] for d in data]
+                display_name = FIELD_UNITS.get(field, field)
                 pen = pg.mkPen(color=colors[color_idx % len(colors)], width=2)
-                self.plot_widget.plot(times, values, name=field, pen=pen)
+                self.plot_widget.plot(times, values, name=display_name, pen=pen)
                 color_idx += 1
+                
+        # 设置 Y 轴标签
+        if len(active_fields) == 1:
+            self.plot_widget.setLabel('left', FIELD_UNITS.get(active_fields[0], "Value"))
+        elif len(active_fields) > 1:
+            self.plot_widget.setLabel('left', "Value (mixed units)")
+        else:
+            self.plot_widget.setLabel('left', "Value")
