@@ -180,7 +180,7 @@ class StaticBlock:
         return block
 
 class Groove:
-    def __init__(self, x, y, radius=150.0, thickness=20.0, name="Groove"):
+    def __init__(self, x, y, radius=150.0, thickness=20.0, name="Groove", fixed=True):
         self.id = uuid.uuid4().hex
         self.type = "groove"
         self.name = name
@@ -192,7 +192,12 @@ class Groove:
         self.restitution = 0.8
         self.friction = 0.2
         self.color = "#808080"
-        self.static = True
+        
+        self.fixed = fixed
+        self.static = fixed
+        self.mass = 10.0
+        self.vel = np.array([0.0, 0.0], dtype=np.float64)
+        self.acc = np.array([0.0, 0.0], dtype=np.float64)
 
     @property
     def pos(self):
@@ -216,18 +221,28 @@ class Groove:
             "restitution": float(self.restitution),
             "friction": float(self.friction),
             "color": self.color,
-            "static": self.static
+            "static": self.static,
+            "fixed": self.fixed,
+            "mass": float(self.mass),
+            "vel": self.vel.tolist(),
+            "acc": self.acc.tolist()
         }
 
     @classmethod
     def from_state(cls, data):
         c_pos = data.get("center_pos", [0.0, 0.0])
+        fixed = data.get("fixed", data.get("static", True))
         groove = cls(x=c_pos[0], y=c_pos[1], radius=data.get("radius", 150.0),
-                     thickness=data.get("thickness", 20.0), name=data.get("name", "Groove"))
+                     thickness=data.get("thickness", 20.0), name=data.get("name", "Groove"),
+                     fixed=fixed)
         groove.id = data.get("id", uuid.uuid4().hex)
         groove.start_angle = data.get("start_angle", 0.0)
         groove.end_angle = data.get("end_angle", 180.0)
         groove.restitution = data.get("restitution", 0.8)
         groove.friction = data.get("friction", 0.2)
         groove.color = data.get("color", "#808080")
+        groove.mass = data.get("mass", 10.0)
+        groove.vel = np.array(data.get("vel", [0.0, 0.0]), dtype=np.float64)
+        groove.acc = np.array(data.get("acc", [0.0, 0.0]), dtype=np.float64)
+        groove.static = groove.fixed
         return groove

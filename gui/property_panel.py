@@ -1,5 +1,6 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QLineEdit, QDoubleSpinBox, QGroupBox, QLabel, QPushButton, QHBoxLayout
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QLineEdit, QDoubleSpinBox, QGroupBox, QLabel, QPushButton, QHBoxLayout, QCheckBox
 from PyQt5.QtCore import Qt, pyqtSignal
+import numpy as np
 from core.models import Ball, Block, Spring, StaticBlock, Groove
 
 class PropertyPanel(QWidget):
@@ -27,6 +28,9 @@ class PropertyPanel(QWidget):
         self.sp_restitution = QDoubleSpinBox(); self.sp_restitution.setRange(0, 1.5); self.sp_restitution.setSingleStep(0.1)
         self.sp_friction = QDoubleSpinBox(); self.sp_friction.setRange(0, 1.0); self.sp_friction.setSingleStep(0.1)
         self.sp_angle = QDoubleSpinBox(); self.sp_angle.setRange(-360, 360)
+        
+        self.cb_fixed = QCheckBox("固定")
+        self.cb_fixed.toggled.connect(self._on_fixed_toggled)
         
         # 小球属性
         self.sp_radius = QDoubleSpinBox(); self.sp_radius.setRange(1, 1000)
@@ -68,6 +72,7 @@ class PropertyPanel(QWidget):
         
         self.form_layout.addRow("ID:", self.lb_id)
         self.form_layout.addRow("名称:", self.le_name)
+        self.form_layout.addRow("是否固定:", self.cb_fixed)
         self.form_layout.addRow("质量:", self.sp_mass)
         self.form_layout.addRow("坐标 X:", self.sp_x)
         self.form_layout.addRow("坐标 Y:", self.sp_y)
@@ -111,6 +116,16 @@ class PropertyPanel(QWidget):
             self.group_box.setEnabled(True)
             self.update_from_object()
             
+    def _on_fixed_toggled(self, fixed):
+        if self._updating or self.current_obj is None: return
+        if isinstance(self.current_obj, Groove):
+            self.current_obj.fixed = fixed
+            self.current_obj.static = fixed
+            if fixed:
+                self.current_obj.vel = np.array([0.0, 0.0], dtype=np.float64)
+            self.update_from_object()
+            self.property_changed.emit()
+            
     def update_from_object(self):
         if self.current_obj is None: return
         self._updating = True
@@ -145,6 +160,24 @@ class PropertyPanel(QWidget):
         self.sp_width.setVisible(is_block or is_static); self.form_layout.labelForField(self.sp_width).setVisible(is_block or is_static)
         self.sp_height.setVisible(is_block or is_static); self.form_layout.labelForField(self.sp_height).setVisible(is_block or is_static)
 
+        # 固定/质量/速度控制
+        self.cb_fixed.setVisible(is_groove)
+        if self.form_layout.labelForField(self.cb_fixed):
+            self.form_layout.labelForField(self.cb_fixed).setVisible(is_groove)
+            
+        is_dynamic_groove = is_groove and not self.current_obj.fixed
+        rigid_visible = is_ball or is_block or is_dynamic_groove
+        
+        for w in [self.sp_mass, self.sp_vx, self.sp_vy]:
+            if is_groove:
+                w.setVisible(True)
+                self.form_layout.labelForField(w).setVisible(True)
+                w.setEnabled(not self.current_obj.fixed if w != self.sp_mass else True)
+            else:
+                w.setVisible(rigid_visible)
+                self.form_layout.labelForField(w).setVisible(rigid_visible)
+                w.setEnabled(True)
+
         # 弹簧属性
         for w in [self.sp_stiffness, self.sp_damping, self.sp_rest_length, self.sp_start_x, self.sp_start_y, self.sp_end_x, self.sp_end_y]:
             w.setVisible(is_spring)
@@ -172,6 +205,9 @@ class PropertyPanel(QWidget):
             self.sp_width.setValue(self.current_obj.width)
             self.sp_height.setValue(self.current_obj.height)
         elif is_groove:
+            self.cb_fixed.setChecked(self.current_obj.fixed)
+            self.sp_mass.setValue(self.current_obj.mass)
+            self.sp_vx.setValue(self.current_obj.vel[0]); self.sp_vy.setValue(self.current_obj.vel[1])
             self.sp_radius.setValue(self.current_obj.radius)
             self.sp_thickness.setValue(self.current_obj.thickness)
         elif is_spring:
@@ -204,6 +240,10 @@ class PropertyPanel(QWidget):
             self.current_obj.width = self.sp_width.value()
             self.current_obj.height = self.sp_height.value()
         elif isinstance(self.current_obj, Groove):
+            self.current_obj.fixed = self.cb_fixed.isChecked()
+            self.current_obj.static = self.current_obj.fixed
+            self.current_obj.mass = self.sp_mass.value()
+            self.current_obj.vel[0], self.current_obj.vel[1] = self.sp_vx.value(), self.sp_vy.value()
             self.current_obj.radius = self.sp_radius.value()
             self.current_obj.thickness = self.sp_thickness.value()
         elif isinstance(self.current_obj, Spring):

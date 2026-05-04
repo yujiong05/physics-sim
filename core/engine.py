@@ -150,3 +150,21 @@ class PhysicsEngine:
                 if obj.pos[0] + half_w > self.bounds[2]:
                     obj.pos[0] = self.bounds[2] - half_w
                     obj.vel[0] = -obj.vel[0] * obj.restitution
+            
+            from core.models import Groove
+            if isinstance(obj, Groove):
+                half_w = obj.radius + obj.thickness
+                # 底部边缘是圆心 y + 半径 + 厚度
+                h = obj.radius + obj.thickness
+                if obj.pos[1] + h > self.bounds[3]:
+                    obj.pos[1] = self.bounds[3] - h
+                    obj.vel[1] = -obj.vel[1] * obj.restitution
+                if obj.pos[1] - h < self.bounds[1]:
+                    obj.pos[1] = self.bounds[1] + h
+                    obj.vel[1] = -obj.vel[1] * obj.restitution
+                if obj.pos[0] - half_w < self.bounds[0]:
+                    obj.pos[0] = self.bounds[0] + half_w
+                    obj.vel[0] = -obj.vel[0] * obj.restitution
+                if obj.pos[0] + half_w > self.bounds[2]:
+                    obj.pos[0] = self.bounds[2] - half_w
+                    obj.vel[0] = -obj.vel[0] * obj.restitution

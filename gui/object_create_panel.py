@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QRadioButton, 
                              QComboBox, QFormLayout, QLineEdit, QDoubleSpinBox, QPushButton, 
-                             QLabel, QColorDialog, QStackedWidget)
+                             QLabel, QColorDialog, QStackedWidget, QCheckBox)
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtGui import QColor
 
@@ -171,13 +171,34 @@ class ObjectCreatePanel(QWidget):
         self.groove_name.setPlaceholderText("留空自动生成")
         self.groove_radius = QDoubleSpinBox(); self.groove_radius.setRange(10, 1000); self.groove_radius.setValue(150.0)
         self.groove_thickness = QDoubleSpinBox(); self.groove_thickness.setRange(1, 200); self.groove_thickness.setValue(20.0)
+        
+        self.groove_fixed = QCheckBox("固定"); self.groove_fixed.setChecked(True)
+        self.groove_mass = QDoubleSpinBox(); self.groove_mass.setRange(0.1, 1000); self.groove_mass.setValue(10.0)
+        self.groove_vx = QDoubleSpinBox(); self.groove_vx.setRange(-2000, 2000); self.groove_vx.setValue(0.0)
+        self.groove_vy = QDoubleSpinBox(); self.groove_vy.setRange(-2000, 2000); self.groove_vy.setValue(0.0)
+        
         self.groove_restitution = QDoubleSpinBox(); self.groove_restitution.setRange(0, 1.1); self.groove_restitution.setValue(0.8)
         self.groove_friction = QDoubleSpinBox(); self.groove_friction.setRange(0, 1.0); self.groove_friction.setValue(0.2)
+        
         l.addRow("名称:", self.groove_name)
         l.addRow("半径:", self.groove_radius)
         l.addRow("厚度:", self.groove_thickness)
+        l.addRow("是否固定:", self.groove_fixed)
+        l.addRow("质量:", self.groove_mass)
+        l.addRow("初速度 VX:", self.groove_vx)
+        l.addRow("初速度 VY:", self.groove_vy)
         l.addRow("弹性:", self.groove_restitution)
         l.addRow("摩擦力:", self.groove_friction)
+        
+        # 联动控制
+        def toggle_fixed():
+            fixed = self.groove_fixed.isChecked()
+            self.groove_mass.setEnabled(not fixed)
+            self.groove_vx.setEnabled(not fixed)
+            self.groove_vy.setEnabled(not fixed)
+        self.groove_fixed.toggled.connect(toggle_fixed)
+        toggle_fixed() # 初始化
+        
         return w
 
     def on_create_clicked(self):
@@ -235,6 +256,10 @@ class ObjectCreatePanel(QWidget):
                 "name": self.groove_name.text(),
                 "radius": self.groove_radius.value(),
                 "thickness": self.groove_thickness.value(),
+                "fixed": self.groove_fixed.isChecked(),
+                "mass": self.groove_mass.value(),
+                "vx": self.groove_vx.value(),
+                "vy": self.groove_vy.value(),
                 "restitution": self.groove_restitution.value(),
                 "friction": self.groove_friction.value(),
                 "color": "#808080"

@@ -171,6 +171,10 @@ class MainWindow(QMainWindow):
         for template_fn in ALL_TEMPLATES:
             data = template_fn()
             action = QAction(data["name"], self)
+            desc = data.get("description", "")
+            if desc:
+                action.setToolTip(desc)
+                action.setStatusTip(desc)
             action.triggered.connect(lambda checked, fn=template_fn: self.load_template(fn()))
             tmpl_menu.addAction(action)
 
@@ -183,16 +187,26 @@ class MainWindow(QMainWindow):
         objects = []
         for obj_data in template_data.get("objects", []):
             t = obj_data.get("type")
-            if t == "ball":
-                objects.append(Ball.from_state(obj_data))
-            elif t == "block":
-                objects.append(Block.from_state(obj_data))
-            elif t == "spring":
-                objects.append(Spring.from_state(obj_data))
+            if t == "ball": objects.append(Ball.from_state(obj_data))
+            elif t == "block": objects.append(Block.from_state(obj_data))
+            elif t == "spring": objects.append(Spring.from_state(obj_data))
+            elif t == "static_block": objects.append(StaticBlock.from_state(obj_data))
+            elif t == "groove": objects.append(Groove.from_state(obj_data))
 
         self.apply_project_data(engine_data, objects, counters, scene_data)
         self.current_file_path = None
         self.setWindowTitle(f"二维物理仿真实验室 - [{template_data.get('name', '实验模板')}]")
+        
+        desc = template_data.get("description", "")
+        if desc:
+            self.statusBar().showMessage(f"已加载模板：{template_data['name']} - {desc}")
+            
+        preferred_obs = template_data.get("preferred_observe_object")
+        if preferred_obs:
+            for obj in self.engine.objects:
+                if obj.name == preferred_obs:
+                    self.on_object_selected(obj)
+                    break
 
     def new_project(self):
         self.pause_simulation()

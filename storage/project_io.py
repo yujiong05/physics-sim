@@ -49,5 +49,7 @@ def load_project(path):
             objects.append(Spring.from_state(obj_data))
         elif t == "static_block":
             objects.append(StaticBlock.from_state(obj_data))
+        elif t == "groove":
+            objects.append(Groove.from_state(obj_data))
 
     return engine_data, objects, counters, scene_data

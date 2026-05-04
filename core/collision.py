@@ -295,8 +295,7 @@ def collide_ball_groove(ball: Ball, groove: Groove):
     dx = ball.pos[0] - groove.pos[0]
     dy = ball.pos[1] - groove.pos[1]
     
-    # |dx| <= radius restriction as requested, or just dy >= 0
-    # The prompt says: "为了避免小球从左右边缘穿出，可在 |dx| <= radius 范围内处理半圆约束。"
+    # |dx| <= radius 范围内处理半圆约束
     if dy < 0 or abs(dx) > groove.radius:
         return
         
@@ -306,21 +305,11 @@ def collide_ball_groove(ball: Ball, groove: Groove):
         
     max_dist = groove.radius - ball.radius
     if dist > max_dist:
-        normal = np.array([dx / dist, dy / dist]) # center to ball
-        
-        # Position correction
-        ball.pos = groove.pos + normal * max_dist
-        
-        # Velocity reflection
-        vn = np.dot(ball.vel, normal)
-        if vn > 0:
-            restitution = min(ball.restitution, groove.restitution)
-            ball.vel -= (1 + restitution) * vn * normal
-            
-        # Friction
-        tangent_vel = ball.vel - np.dot(ball.vel, normal) * normal
-        friction = min(ball.friction if hasattr(ball, 'friction') else 0.2, groove.friction)
-        ball.vel -= friction * tangent_vel * 0.02
+        penetration = dist - max_dist
+        # normal 应该从 Groove 指向 Ball (推回圆心的法线)
+        # 槽壁碰撞，法向是从圆弧向圆心，即 -(ball.pos - groove.pos)
+        normal = np.array([-dx / dist, -dy / dist])
+        _apply_impulse(ball, groove, normal, penetration)
 
 def collide_block_groove(block: Block, groove: Groove):
     import math
