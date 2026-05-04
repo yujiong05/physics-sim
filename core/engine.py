@@ -78,16 +78,16 @@ class PhysicsEngine:
             self._handle_boundary_collision(obj)
 
         # 6. 应用约束 (位置和速度投影)
-        apply_rope_constraints(self.objects, id_map)
-        apply_rod_constraints(self.objects, id_map)
+        apply_rope_constraints(self.objects, id_map, iterations=8)
+        apply_rod_constraints(self.objects, id_map, iterations=8)
 
         # 7. 物体间碰撞检测与响应
         rigid_bodies = [o for o in self.objects if not isinstance(o, Spring)]
         detect_and_resolve(rigid_bodies)
         
         # 8. 再次应用约束以修正碰撞引起的位移
-        apply_rope_constraints(self.objects, id_map)
-        apply_rod_constraints(self.objects, id_map)
+        apply_rope_constraints(self.objects, id_map, iterations=8)
+        apply_rod_constraints(self.objects, id_map, iterations=8)
 
     def _apply_spring_physics(self, spring, id_map):
         # 根据绑定更新端点坐标

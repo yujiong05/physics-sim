@@ -295,27 +295,38 @@ class PropertyPanel(QWidget):
 
     def _apply_link_endpoint_edits(self):
         # 坐标编辑：如果坐标改变，自动解除挂载
+        coords_changed = False
         new_sx, new_sy = self.sp_start_x.value(), self.sp_start_y.value()
         if abs(new_sx - self.current_obj.start_pos[0]) > 0.01 or abs(new_sy - self.current_obj.start_pos[1]) > 0.01:
             self.current_obj.start_body_id = None
             self.current_obj.start_pos[0], self.current_obj.start_pos[1] = new_sx, new_sy
+            coords_changed = True
             
         new_ex, new_ey = self.sp_end_x.value(), self.sp_end_y.value()
         if abs(new_ex - self.current_obj.end_pos[0]) > 0.01 or abs(new_ey - self.current_obj.end_pos[1]) > 0.01:
             self.current_obj.end_body_id = None
             self.current_obj.end_pos[0], self.current_obj.end_pos[1] = new_ex, new_ey
-        # 重新刷新显示（以防解除挂载后 UI 需要更新文本）
-        if isinstance(self.current_obj, Spring):
-            self.update_from_object()
+            coords_changed = True
+        
+        # 如果是 Rod 或 Rope，坐标变化后重新计算长度
+        if coords_changed and isinstance(self.current_obj, (Rod, Rope)):
+            self.current_obj.recalculate_length()
+            
+        # 重新刷新显示（以防解除挂载或长度变化后 UI 需要更新文本）
+        self.update_from_object()
 
     def unbind_start(self):
-        if isinstance(self.current_obj, Spring):
-            self.current_obj.start_body_id = None
-            self.update_from_object()
-            self.property_changed.emit()
+        if self.current_obj is None: return
+        self.current_obj.start_body_id = None
+        if isinstance(self.current_obj, (Rod, Rope)):
+            self.current_obj.recalculate_length()
+        self.update_from_object()
+        self.property_changed.emit()
 
     def unbind_end(self):
-        if isinstance(self.current_obj, Spring):
-            self.current_obj.end_body_id = None
-            self.update_from_object()
-            self.property_changed.emit()
+        if self.current_obj is None: return
+        self.current_obj.end_body_id = None
+        if isinstance(self.current_obj, (Rod, Rope)):
+            self.current_obj.recalculate_length()
+        self.update_from_object()
+        self.property_changed.emit()

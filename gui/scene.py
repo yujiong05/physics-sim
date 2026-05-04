@@ -195,6 +195,12 @@ class EndpointHandle(QGraphicsEllipseItem):
                 else:
                     self.owner_item.obj.end_pos = np.array([new_pos.x(), new_pos.y()])
                 self.owner_item.rebuild_path()
+                
+                # 如果是 Rod 或 Rope，重新计算长度
+                if getattr(self.owner_item.obj, "type", "") in ["rod", "rope"]:
+                    self.owner_item.obj.recalculate_length()
+                    if self.scene() and hasattr(self.scene(), "object_changed"):
+                        self.scene().object_changed.emit(self.owner_item.obj)
         return super().itemChange(change, value)
 
     def mousePressEvent(self, event):
@@ -220,6 +226,12 @@ class EndpointHandle(QGraphicsEllipseItem):
         if self.is_start: self.owner_item.obj.start_body_id = None
         else: self.owner_item.obj.end_body_id = None
         self.owner_item.rebuild_path()
+        
+        # 解绑后可能需要重新计算长度（虽然位置没变，但状态变了）
+        if getattr(self.owner_item.obj, "type", "") in ["rod", "rope"]:
+            self.owner_item.obj.recalculate_length()
+            if self.scene() and hasattr(self.scene(), "object_changed"):
+                self.scene().object_changed.emit(self.owner_item.obj)
         event.accept()
 
     def update_status(self, is_mounting_this):
@@ -466,6 +478,7 @@ class RopeItem(QGraphicsPathItem):
 # ─────────────────────────────────────────────────────────
 class PhysicsScene(QGraphicsScene):
     object_selected = pyqtSignal(object)
+    object_changed = pyqtSignal(object)
     request_create_object = pyqtSignal(str, float, float, dict)
     request_apply_force = pyqtSignal(object)
     request_delete_object = pyqtSignal(object)
@@ -588,6 +601,12 @@ class PhysicsScene(QGraphicsScene):
                 
                 self.cancel_mounting()
                 owner_item.rebuild_path()
+                
+                # 如果是 Rod 或 Rope，挂载后重新计算长度
+                if getattr(owner_item.obj, "type", "") in ["rod", "rope"]:
+                    owner_item.obj.recalculate_length()
+                    self.object_changed.emit(owner_item.obj)
+                
                 event.accept()
                 return
             elif not hit_handle:

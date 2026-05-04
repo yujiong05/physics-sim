@@ -196,6 +196,10 @@ class DataPanel(QWidget):
         data = self.recorder.get_data(self.current_obj.id)
         if not data: return
         
+        # 只保留最近 1500 个点，防止性能下降并使曲线更聚焦
+        if len(data) > 1500:
+            data = data[-1500:]
+            
         times = [d["time"] for d in data]
         
         colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
@@ -208,7 +212,8 @@ class DataPanel(QWidget):
                 values = [d[field] for d in data]
                 display_name = FIELD_UNITS.get(field, field)
                 pen = pg.mkPen(color=colors[color_idx % len(colors)], width=2)
-                self.plot_widget.plot(times, values, name=display_name, pen=pen)
+                # 开启抗锯齿
+                self.plot_widget.plot(times, values, name=display_name, pen=pen, antialias=True)
                 color_idx += 1
                 
         # 设置 Y 轴标签

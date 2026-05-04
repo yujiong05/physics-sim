@@ -271,6 +271,10 @@ class Rod:
         self.length = np.linalg.norm(self.end_pos - self.start_pos)
         self.static = True 
 
+    def recalculate_length(self):
+        d = np.linalg.norm(self.end_pos - self.start_pos)
+        self.length = max(1.0, float(d))
+
     def get_state(self):
         return {
             "type": self.type,
@@ -333,6 +337,10 @@ class Rope:
         self.start_local_offset = np.array([0.0, 0.0], dtype=np.float64)
         self.end_local_offset = np.array([0.0, 0.0], dtype=np.float64)
         self.static = True
+
+    def recalculate_length(self):
+        d = np.linalg.norm(self.end_pos - self.start_pos)
+        self.length = max(1.0, float(d))
 
     def get_state(self):
         return {

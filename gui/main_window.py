@@ -41,6 +41,7 @@ class MainWindow(QMainWindow):
         self.rope_counter = 1
         self.initial_state_snapshot = None
         self.current_file_path = None
+        self.physics_substeps = 4  # 物理子步数，提升摆动和约束平滑度
 
         
         self.create_menus()
@@ -378,6 +379,7 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(self.property_panel)
         
         self.scene.object_selected.connect(self.on_object_selected)
+        self.scene.object_changed.connect(self.on_object_changed)
         self.scene.request_create_object.connect(self.create_object_at)
         self.scene.request_apply_force.connect(self.show_apply_force_dialog)
         self.scene.request_delete_object.connect(self.delete_object)
@@ -525,6 +527,15 @@ class MainWindow(QMainWindow):
         self.data_panel.refresh_objects(self.engine.objects)
         if not self.is_playing: self.capture_initial_state()
 
+    def on_object_changed(self, obj):
+        """当场景中物体发生属性变化（如挂载导致的长度变化）时调用"""
+        if self.property_panel.current_obj == obj:
+            self.property_panel.update_from_object()
+        
+        self.scene.update_items(playing=False)
+        if not self.is_playing:
+            self.capture_initial_state()
+
     def show_apply_force_dialog(self, obj):
         if not isinstance(obj, (Ball, Block)):
             QMessageBox.information(self, "提示", "该对象不能施加力")
@@ -583,8 +594,14 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("重置完成")
         
     def update_simulation(self):
-        dt = 0.016
-        self.engine.step(dt)
+        frame_dt = 0.016
+        sub_dt = frame_dt / self.physics_substeps
+        
+        # 执行物理子步
+        for _ in range(self.physics_substeps):
+            self.engine.step(sub_dt)
+            
         self.scene.update_items(record_trail=True, playing=True)
-        self.recorder.record(self.engine.time, self.engine.objects, self.engine, dt=dt)
+        # 数据记录使用帧总时长 frame_dt 进行有效加速度计算
+        self.recorder.record(self.engine.time, self.engine.objects, self.engine, dt=frame_dt)
         self.data_panel.update_plot()

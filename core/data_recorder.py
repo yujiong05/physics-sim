@@ -9,22 +9,29 @@ class DataRecorder:
         self.max_records = max_records
         self.records = {}  # {object_id: [dict, ...]}
         self.prev_velocities = {} # {object_id: np.array([vx, vy])}
+        self.prev_smoothed_acc = {} # {object_id: np.array([ax, ay])}
+        self.alpha = 0.3 # 指数平滑系数
 
     def clear_all(self):
         self.records.clear()
         self.prev_velocities.clear()
+        self.prev_smoothed_acc.clear()
 
     def clear_object(self, obj_id):
         if obj_id in self.records:
             self.records[obj_id].clear()
         if obj_id in self.prev_velocities:
             del self.prev_velocities[obj_id]
+        if obj_id in self.prev_smoothed_acc:
+            del self.prev_smoothed_acc[obj_id]
 
     def remove_object(self, obj_id):
         if obj_id in self.records:
             del self.records[obj_id]
         if obj_id in self.prev_velocities:
             del self.prev_velocities[obj_id]
+        if obj_id in self.prev_smoothed_acc:
+            del self.prev_smoothed_acc[obj_id]
 
     def record(self, current_time, objects, engine, dt=None):
         scene_height = engine.bounds[3]
@@ -49,8 +56,16 @@ class DataRecorder:
                 if dt is not None and dt > 0 and obj.id in self.prev_velocities:
                     eff_acc_px = (obj.vel - self.prev_velocities[obj.id]) / dt
                 
-                data["ax"] = px_s2_to_m_s2(eff_acc_px[0])
-                data["ay"] = px_s2_to_m_s2(eff_acc_px[1])
+                # EMA 平滑加速度
+                if obj.id in self.prev_smoothed_acc:
+                    smoothed_acc_px = self.alpha * eff_acc_px + (1 - self.alpha) * self.prev_smoothed_acc[obj.id]
+                else:
+                    smoothed_acc_px = eff_acc_px
+                
+                self.prev_smoothed_acc[obj.id] = smoothed_acc_px.copy()
+                
+                data["ax"] = px_s2_to_m_s2(smoothed_acc_px[0])
+                data["ay"] = px_s2_to_m_s2(smoothed_acc_px[1])
                 
                 # 能量计算
                 data["mass"] = obj.mass
