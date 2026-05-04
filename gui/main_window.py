@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QGraphicsView, QToolBar, QAction, 
-                             QActionGroup, QFileDialog, QMessageBox, QLabel)
+                             QActionGroup, QFileDialog, QMessageBox, QLabel, QDialog)
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QIcon
 import pyqtgraph as pg
@@ -14,6 +14,7 @@ from gui.property_panel import PropertyPanel
 from gui.object_create_panel import ObjectCreatePanel
 from gui.data_panel import DataPanel
 from core.data_recorder import DataRecorder
+from gui.force_dialog import ForceDialog
 
 from storage.project_io import save_project, load_project
 from templates.experiment_templates import ALL_TEMPLATES
@@ -123,6 +124,7 @@ class MainWindow(QMainWindow):
             self.engine.add_object(obj)
             self.scene.add_physics_object(obj)
             
+        self.engine.clear_forces()
         self.engine.time = 0.0
         self.scene.clear_all_trails()
         self.recorder.clear_all()
@@ -213,6 +215,7 @@ class MainWindow(QMainWindow):
 
     def apply_project_data(self, engine_data, objects, counters, scene_data):
         self.clear_scene()
+        self.engine.clear_forces()
         self.engine.time = engine_data.get("time", 0.0)
         if "gravity" in engine_data:
             self.engine.gravity = np.array(engine_data["gravity"], dtype=np.float64)
@@ -321,7 +324,6 @@ class MainWindow(QMainWindow):
         
         # 画布
         self.scene = PhysicsScene()
-        self.scene.request_create_object.connect(self.create_object_at)
         self.view = QGraphicsView(self.scene)
         self.view.setRenderHint(1)
         mid_layout.addWidget(self.view)
@@ -341,12 +343,16 @@ class MainWindow(QMainWindow):
         
         main_layout.addLayout(mid_layout, stretch=2)
         
-        # 3. 右侧：属性面板和图表
+        # 右侧面板
         right_layout = QVBoxLayout()
         self.property_panel = PropertyPanel()
         self.property_panel.property_changed.connect(self.on_property_changed)
-        self.scene.object_selected.connect(self.on_object_selected)
         right_layout.addWidget(self.property_panel)
+        
+        self.scene.object_selected.connect(self.on_object_selected)
+        self.scene.request_create_object.connect(self.create_object_at)
+        self.scene.request_apply_force.connect(self.show_apply_force_dialog)
+        self.scene.request_delete_object.connect(self.delete_object)
         
         self.data_panel = DataPanel(self.recorder)
         right_layout.addWidget(self.data_panel)
@@ -371,6 +377,18 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"等待在画布上放置: {object_type}")
 
     def create_object_at(self, object_type, x, y, params):
+        import time
+        if not hasattr(self, '_last_create_signature'):
+            self._last_create_signature = None
+        sig = (object_type, round(x, 1), round(y, 1), time.monotonic())
+        if self._last_create_signature:
+            last_sig = self._last_create_signature
+            if last_sig[0] == sig[0] and last_sig[1] == sig[1] and last_sig[2] == sig[2]:
+                if sig[3] - last_sig[3] < 0.1:
+                    print(f"Warning: Ignored duplicate create_object_at for {object_type} at {x}, {y}")
+                    return
+        self._last_create_signature = sig
+        
         objects_to_add = []
         name = params.get("name", "").strip()
         if not name or name.lower() in ["ball", "block", "spring", "未命名"]:
@@ -423,15 +441,51 @@ class MainWindow(QMainWindow):
 
     def delete_selected(self):
         selected = self.scene.selectedItems()
+        objs_to_delete = []
         for item in selected:
-            if hasattr(item, 'obj'):
-                obj = item.obj
-                self.engine.remove_object(obj)
-                self.scene.remove_physics_object(obj)
-                self.recorder.remove_object(obj.id)
-        self.property_panel.set_object(None)
+            owner, obj = self.scene.find_owner_item(item)
+            if obj and obj not in objs_to_delete:
+                objs_to_delete.append(obj)
+        for obj in objs_to_delete:
+            self.delete_object(obj)
+        self.scene.clearSelection()
+
+    def delete_object(self, obj):
+        if obj not in self.engine.objects:
+            return
+            
+        # 如果删除的是 Ball 或 Block，解除关联的弹簧绑定
+        if isinstance(obj, (Ball, Block)):
+            for other in self.engine.objects:
+                if isinstance(other, Spring):
+                    if other.start_body_id == obj.id:
+                        other.start_body_id = None
+                        other.start_pos = other.start_pos.copy() # preserve pos
+                    if other.end_body_id == obj.id:
+                        other.end_body_id = None
+                        other.end_pos = other.end_pos.copy() # preserve pos
+                        
+        self.engine.remove_object(obj)
+        self.engine.remove_forces_for_object(obj.id)
+        self.scene.remove_physics_object(obj)
+        self.recorder.remove_object(obj.id)
+        
+        if self.property_panel.current_obj == obj:
+            self.property_panel.set_object(None)
+            
         self.data_panel.refresh_objects(self.engine.objects)
         if not self.is_playing: self.capture_initial_state()
+
+    def show_apply_force_dialog(self, obj):
+        if not isinstance(obj, (Ball, Block)):
+            QMessageBox.information(self, "提示", "该对象不能施加力")
+            return
+            
+        dialog = ForceDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            magnitude, angle_deg, duration = dialog.get_values()
+            self.engine.add_force(obj.id, magnitude, angle_deg, duration)
+            self.statusBar().showMessage(f"已对 {obj.name} 施加 {magnitude}N，方向 {angle_deg}°，持续 {duration}s")
 
     def clear_scene(self):
         self.engine.clear()

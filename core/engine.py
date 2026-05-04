@@ -1,13 +1,25 @@
 import numpy as np
 from core.models import Ball, Spring
 from core.collision import detect_and_resolve
+from core.force import AppliedForce
 
 class PhysicsEngine:
     def __init__(self):
         self.objects = []
+        self.applied_forces = []
         self.gravity = np.array([0.0, 980.0], dtype=np.float64) 
         self.time = 0.0
         self.bounds = (0, 0, 800, 600)
+        
+    def add_force(self, target_id, magnitude, angle_deg, duration):
+        if duration > 0:
+            self.applied_forces.append(AppliedForce(target_id, magnitude, angle_deg, duration))
+            
+    def clear_forces(self):
+        self.applied_forces.clear()
+        
+    def remove_forces_for_object(self, object_id):
+        self.applied_forces = [f for f in self.applied_forces if f.target_id != object_id]
         
     def add_object(self, obj):
         self.objects.append(obj)
@@ -18,6 +30,7 @@ class PhysicsEngine:
         
     def clear(self):
         self.objects.clear()
+        self.applied_forces.clear()
         self.time = 0.0
         
     def step(self, dt):
@@ -36,6 +49,17 @@ class PhysicsEngine:
         for obj in self.objects:
             if isinstance(obj, Spring):
                 self._apply_spring_physics(obj, id_map)
+                
+        # 处理临时外力
+        active_forces = []
+        for f in self.applied_forces:
+            target = id_map.get(f.target_id)
+            if target and not getattr(target, "static", False) and not isinstance(target, Spring):
+                target.acc += f.force_vector / target.mass
+                f.elapsed += dt
+                if f.elapsed < f.duration:
+                    active_forces.append(f)
+        self.applied_forces = active_forces
         
         # 4. 积分更新速度和位置
         for obj in self.objects:

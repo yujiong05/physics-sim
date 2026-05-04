@@ -4,9 +4,9 @@ gui/scene.py
 """
 import math
 from PyQt5.QtWidgets import (QGraphicsScene, QGraphicsEllipseItem, QGraphicsRectItem,
-                              QGraphicsItem, QGraphicsLineItem, QGraphicsPathItem)
+                              QGraphicsItem, QGraphicsLineItem, QGraphicsPathItem, QMenu)
 from PyQt5.QtCore import Qt, pyqtSignal, QPointF, QRectF
-from PyQt5.QtGui import QBrush, QPen, QColor, QPainterPath
+from PyQt5.QtGui import QBrush, QPen, QColor, QPainterPath, QTransform
 import numpy as np
 
 from core.models import Ball, Block, Spring, StaticBlock, Groove
@@ -322,6 +322,8 @@ class SpringItem(QGraphicsPathItem):
 class PhysicsScene(QGraphicsScene):
     object_selected = pyqtSignal(object)
     request_create_object = pyqtSignal(str, float, float, dict)
+    request_apply_force = pyqtSignal(object)
+    request_delete_object = pyqtSignal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -367,6 +369,52 @@ class PhysicsScene(QGraphicsScene):
             elif hasattr(item, 'obj'): self.object_selected.emit(item.obj)
         else: self.object_selected.emit(None)
 
+    def find_owner_item(self, item):
+        current = item
+        while current:
+            if hasattr(current, 'obj') and current.obj is not None:
+                return current, current.obj
+            if hasattr(current, 'spring_item'):
+                return current.spring_item, current.spring_item.obj
+            current = current.parentItem()
+        return None, None
+
+    def contextMenuEvent(self, event):
+        item = self.itemAt(event.scenePos(), QTransform())
+        if not item:
+            super().contextMenuEvent(event)
+            return
+            
+        owner_item, obj = self.find_owner_item(item)
+
+        if not obj:
+            super().contextMenuEvent(event)
+            return
+
+        # 选中主图元
+        self.clearSelection()
+        if owner_item:
+            owner_item.setSelected(True)
+            
+        self.object_selected.emit(obj)
+
+        menu = QMenu()
+        apply_action = menu.addAction("施加力")
+        delete_action = menu.addAction("删除对象")
+
+        if isinstance(obj, (Ball, Block)):
+            apply_action.setEnabled(True)
+        else:
+            apply_action.setEnabled(False)
+
+        action = menu.exec_(event.screenPos())
+        if action == apply_action:
+            self.request_apply_force.emit(obj)
+        elif action == delete_action:
+            self.request_delete_object.emit(obj)
+        
+        event.accept()
+
     def mousePressEvent(self, event):
         # 1. 检查挂载交互
         if self.mounting_endpoint:
@@ -405,9 +453,14 @@ class PhysicsScene(QGraphicsScene):
         if event.button() == Qt.LeftButton:
             sp = event.scenePos()
             if self.mode == 'pending_create' and self._pending_type:
-                self.request_create_object.emit(self._pending_type, sp.x(), sp.y(), dict(self._pending_params))
+                object_type = self._pending_type
+                params = dict(self._pending_params)
+                self._pending_type = None
+                self._pending_params = None
                 self.mode = 'select'
-                event.accept(); return
+                self.request_create_object.emit(object_type, sp.x(), sp.y(), params)
+                event.accept()
+                return
         super().mousePressEvent(event)
 
     def set_mode(self, mode):
@@ -420,6 +473,9 @@ class PhysicsScene(QGraphicsScene):
         self.mode = 'pending_create'
 
     def add_physics_object(self, obj):
+        if obj in self.items_dict:
+            print(f"Warning: Object {getattr(obj, 'name', obj)} already in scene!")
+            return
         if isinstance(obj, Ball): item = BallItem(obj)
         elif isinstance(obj, Block): item = BlockItem(obj)
         elif isinstance(obj, Spring):
@@ -448,13 +504,18 @@ class PhysicsScene(QGraphicsScene):
         self.items_dict[obj] = item
 
     def remove_physics_object(self, obj):
-        if obj not in self.items_dict: return
+        if obj not in self.items_dict: 
+            return
         item = self.items_dict.pop(obj)
         if isinstance(item, SpringItem):
-            self.removeItem(item.start_handle)
-            self.removeItem(item.end_handle)
-        if hasattr(item, 'trail_path_item'): self.removeItem(item.trail_path_item)
-        self.removeItem(item)
+            if item.start_handle.scene() == self:
+                self.removeItem(item.start_handle)
+            if item.end_handle.scene() == self:
+                self.removeItem(item.end_handle)
+        if hasattr(item, 'trail_path_item') and item.trail_path_item.scene() == self: 
+            self.removeItem(item.trail_path_item)
+        if item.scene() == self:
+            self.removeItem(item)
 
     def update_items(self, record_trail=False, playing=False):
         for obj, item in self.items_dict.items():
