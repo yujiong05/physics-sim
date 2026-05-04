@@ -4,7 +4,14 @@
 左侧 QListWidget 导航 + 右侧 QStackedWidget 多页切换；全局明亮学术风 QSS。
 """
 
+import os
 import sys
+
+# 将项目根目录添加到 sys.path，以便导入 physics_sim 模块
+platform_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.abspath(os.path.join(platform_dir, "..", ".."))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QKeySequence
@@ -17,6 +24,7 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QPushButton,
     QShortcut,
     QStackedWidget,
     QVBoxLayout,
@@ -26,95 +34,41 @@ from PyQt5.QtWidgets import (
 from ui.page_collision import PageCollision
 from ui.page_pendulum import PagePendulum
 from ui.page_projectile import PageProjectile
-from ui.pages.page_home import HomePage
+from ui.pages.page_menu import PageMenu
+from gui.main_window import MainWindow as PhysicsSimWindow
 
 
-def apply_global_style(app: QApplication) -> None:
+def get_platform_qss() -> str:
     """
-    应用全局 Qt Style Sheets（浅色、扁平、圆角控件）。
-    说明：QSS 不支持 CSS 的 box-shadow；层次感通过边框与背景色差模拟，
-    若需真实阴影可在后续自定义卡片组件上使用 QGraphicsDropShadowEffect。
+    获取平台专属的 QSS 样式。
     """
-    app.setStyle("Fusion")
-
-    palette = app.palette()
-    palette.setColor(palette.Window, QColor("#f5f7fb"))
-    palette.setColor(palette.WindowText, QColor("#1f2937"))
-    palette.setColor(palette.Base, QColor("#ffffff"))
-    palette.setColor(palette.AlternateBase, QColor("#eef2f8"))
-    palette.setColor(palette.Button, QColor("#ffffff"))
-    palette.setColor(palette.ButtonText, QColor("#1f2937"))
-    palette.setColor(palette.Highlight, QColor("#3b82f6"))
-    palette.setColor(palette.HighlightedText, QColor("#ffffff"))
-    app.setPalette(palette)
-
-    app.setStyleSheet(
-        """
-        QWidget {
-            font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
-            font-size: 11pt;
-            color: #1f2937;
+    return """
+        #PlatformWindow {
             background-color: #f5f7fb;
         }
-        QMainWindow {
-            background-color: #f5f7fb;
-        }
-        /* 侧栏容器：白底 + 细边框模拟轻微层次（非阴影） */
-        QFrame#sidebar {
+
+        /* 返回主菜单按钮样式 */
+        QPushButton#backToMenuBtn {
             background-color: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-        }
-        QLabel#sidebarBrand {
-            font-size: 13pt;
-            font-weight: 600;
-            color: #0f172a;
-            padding: 8px 4px 12px 4px;
-            background-color: transparent;
-        }
-        QLabel#homeTitle {
-            font-size: 18pt;
-            font-weight: 600;
-            color: #0f172a;
-            background-color: transparent;
-        }
-        QLabel#placeholderTitle {
-            font-size: 16pt;
-            font-weight: 600;
-            color: #0f172a;
-            background-color: transparent;
-        }
-        QListWidget {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
+            color: #3b82f6;
+            border: 1px solid #dbeafe;
             border-radius: 10px;
-            padding: 8px;
-            outline: 0;
-        }
-        QListWidget::item {
-            padding: 12px 14px;
-            margin: 4px 0;
-            border-radius: 8px;
-            color: #334155;
-            background-color: transparent;
-        }
-        QListWidget::item:hover {
-            background-color: #e8f0fe;
-            color: #1e3a8a;
-        }
-        QListWidget::item:selected {
-            background-color: #dbeafe;
-            color: #1e40af;
+            padding: 8px 16px;
             font-weight: 600;
+            font-size: 10.5pt;
+            margin-top: 10px;
         }
+        QPushButton#backToMenuBtn:hover {
+            background-color: #eff6ff;
+            border: 1px solid #3b82f6;
+        }
+
         QStackedWidget {
             background-color: transparent;
         }
-        QScrollArea {
-            background-color: transparent;
-            border: none;
-        }
-        QPushButton {
+
+        /* 平台专属按钮样式 - 仅作用于平台页面 */
+        .PageMenu QPushButton, .PageProjectile QPushButton, .PageCollision QPushButton, .PagePendulum QPushButton {
             background-color: #3b82f6;
             color: #ffffff;
             border: none;
@@ -122,18 +76,10 @@ def apply_global_style(app: QApplication) -> None:
             padding: 10px 18px;
             font-weight: 600;
         }
-        QPushButton:hover {
+        .PageMenu QPushButton:hover, .PageProjectile QPushButton:hover, .PageCollision QPushButton:hover, .PagePendulum QPushButton:hover {
             background-color: #2563eb;
         }
-        QPushButton:pressed {
-            background-color: #1d4ed8;
-        }
-        QPushButton:disabled {
-            background-color: #cbd5e1;
-            color: #64748b;
-        }
-        """
-    )
+    """
 
 
 class MainWindow(QMainWindow):
@@ -143,75 +89,115 @@ class MainWindow(QMainWindow):
     """
 
     NAV_ITEMS = (
-        "主页",
+        "主菜单",
         "抛体运动",
         "碰撞模型",
         "双摆模型",
+        "仿真实验室",
     )
 
     def __init__(self):
         super().__init__()
+        self.setObjectName("PlatformWindow")
         self.setWindowTitle("力学仿真平台")
         self.resize(1120, 720)
         self.setMinimumSize(880, 560)
 
-        self._nav = QListWidget()
-        self._nav.setObjectName("mainNav")
-        self._nav.setSpacing(2)
-        self._nav.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        for text in self.NAV_ITEMS:
-            self._nav.addItem(QListWidgetItem(text))
+        self._apply_platform_style()
 
         self._stack = QStackedWidget()
-        self._stack.addWidget(HomePage())
+        self.page_menu = PageMenu()
+        self.page_menu.module_selected.connect(self._on_nav_changed)
+        
+        self._stack.addWidget(self.page_menu)
         self._stack.addWidget(PageProjectile())
         self._stack.addWidget(PageCollision())
         self._stack.addWidget(PagePendulum())
+        
+        # 仿真实验室界面
+        self.physics_sim = PhysicsSimWindow()
+        self.physics_sim.setPalette(QApplication.style().standardPalette())
+        self.physics_sim.setStyleSheet("/* Reset Style */")
+        self._stack.addWidget(self.physics_sim)
 
-        # 侧栏：品牌标题 + 列表，便于 QSS 统一圆角与留白
-        sidebar = QFrame()
-        sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(260)
-        brand = QLabel("力学仿真")
-        brand.setObjectName("sidebarBrand")
-        side_layout = QVBoxLayout(sidebar)
-        side_layout.setContentsMargins(16, 18, 16, 18)
-        side_layout.setSpacing(8)
-        side_layout.addWidget(brand)
-        side_layout.addWidget(self._nav, stretch=1)
-
+        # 顶层布局：仅包含页面栈（填满全部空间）
         central = QWidget()
-        main_layout = QHBoxLayout(central)
-        main_layout.setContentsMargins(18, 18, 18, 18)
-        main_layout.setSpacing(18)
-        main_layout.addWidget(sidebar, stretch=0)
+        main_layout = QVBoxLayout(central)
+        main_layout.setContentsMargins(0, 0, 0, 0) # 填满
+        main_layout.setSpacing(0)
+
         main_layout.addWidget(self._stack, stretch=1)
 
         self.setCentralWidget(central)
 
-        menu_bar = self.menuBar()
-        menu_settings = menu_bar.addMenu("设置")
-        act_api_key = QAction("DeepSeek API 密钥…", self)
-        act_api_key.triggered.connect(self._open_deepseek_api_dialog)
-        menu_settings.addAction(act_api_key)
+        # 为各个页面注入返回按钮（确保不产生全局底部空隙）
+        self._inject_back_buttons()
 
-        # 键盘/鼠标切换导航时同步页面
-        self._nav.currentRowChanged.connect(self._stack.setCurrentIndex)
-        self._nav.setCurrentRow(0)
+        # 初始化显示
+        self._on_nav_changed(0)
+        self.setStyleSheet(get_platform_qss())
 
-        # Ctrl+Tab / Ctrl+Shift+Tab 循环切换页面（与侧栏选中状态同步）
+        # Ctrl+Tab / Ctrl+Shift+Tab 循环切换页面
         self._shortcut_next = QShortcut(QKeySequence("Ctrl+Tab"), self)
         self._shortcut_next.activated.connect(self._cycle_stack_next)
         self._shortcut_prev = QShortcut(QKeySequence("Ctrl+Shift+Tab"), self)
         self._shortcut_prev.activated.connect(self._cycle_stack_prev)
+
+    def _apply_platform_style(self) -> None:
+        """应用平台专属调色板。"""
+        palette = self.palette()
+        palette.setColor(palette.Window, QColor("#f5f7fb"))
+        palette.setColor(palette.WindowText, QColor("#1f2937"))
+        palette.setColor(palette.Base, QColor("#ffffff"))
+        palette.setColor(palette.AlternateBase, QColor("#eef2f8"))
+        palette.setColor(palette.Button, QColor("#ffffff"))
+        palette.setColor(palette.ButtonText, QColor("#1f2937"))
+        palette.setColor(palette.Highlight, QColor("#3b82f6"))
+        palette.setColor(palette.HighlightedText, QColor("#ffffff"))
+        self.setPalette(palette)
+
+    def _on_nav_changed(self, index: int) -> None:
+        self._stack.setCurrentIndex(index)
+
+    def _inject_back_buttons(self) -> None:
+        """
+        在各实验页面的左侧控制面板底部注入“返回主菜单”按钮。
+        这样可以避免全局底部布局产生的空隙，使中右部内容填满。
+        """
+        # 1. 仿真实验室
+        btn_back_sim = self._create_back_btn()
+        # 仿真实验室的左侧面板是 create_panel，其布局最后有 stretch
+        self.physics_sim.create_panel.layout().addWidget(btn_back_sim)
+
+        # 2. 其他教学实验页
+        # 这些页面的结构：_stack -> LabView (index 1) -> Splitter -> LeftCard -> QVBoxLayout
+        for page in [self._stack.widget(1), self._stack.widget(2), self._stack.widget(3)]:
+            # 找到它们的内部栈和实验室视图中的左侧布局
+            try:
+                # 获取 PageProjectile/PageCollision/PagePendulum 实例
+                lab_view = page._stack.widget(1) # Lab View
+                splitter = lab_view.findChild(QSplitter)
+                left_card = splitter.widget(0)
+                left_layout = left_card.layout()
+                if left_layout:
+                    left_layout.addWidget(self._create_back_btn())
+            except Exception:
+                pass
+
+    def _create_back_btn(self) -> QPushButton:
+        btn = QPushButton("🏠 返回主菜单")
+        btn.setObjectName("backToMenuBtn")
+        btn.setFixedWidth(140)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.clicked.connect(lambda: self._on_nav_changed(0))
+        return btn
 
     def _cycle_stack_next(self) -> None:
         n = self._stack.count()
         if n == 0:
             return
         idx = (self._stack.currentIndex() + 1) % n
-        self._stack.setCurrentIndex(idx)
-        self._nav.setCurrentRow(idx)
+        self._on_nav_changed(idx)
 
     def _open_deepseek_api_dialog(self) -> None:
         from ui.dialog_api_key import DeepSeekApiKeyDialog
@@ -224,13 +210,12 @@ class MainWindow(QMainWindow):
         if n == 0:
             return
         idx = (self._stack.currentIndex() - 1) % n
-        self._stack.setCurrentIndex(idx)
-        self._nav.setCurrentRow(idx)
+        self._on_nav_changed(idx)
 
 
 def main() -> int:
     app = QApplication(sys.argv)
-    apply_global_style(app)
+    app.setStyle("Fusion")
     win = MainWindow()
     win.show()
     return app.exec_()
