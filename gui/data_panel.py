@@ -61,8 +61,9 @@ class DataPanel(QWidget):
         self.cb_objects.clear()
         
         new_idx = -1
-        for i, obj in enumerate(objects):
-            name = f"{obj.name} ({obj.id[:4]})"
+        filtered_objects = [obj for obj in objects if getattr(obj, "type", "") != "static_block"]
+        for i, obj in enumerate(filtered_objects):
+            name = obj.name
             self.cb_objects.addItem(name, obj)
             if current_id == obj.id:
                 new_idx = i

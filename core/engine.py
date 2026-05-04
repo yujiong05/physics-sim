@@ -29,7 +29,7 @@ class PhysicsEngine:
         
         # 2. 初始化刚体加速度为重力
         for obj in self.objects:
-            if not isinstance(obj, Spring):
+            if not isinstance(obj, Spring) and not getattr(obj, "static", False):
                 obj.acc = np.copy(self.gravity)
         
         # 3. 处理弹簧力 (更新端点坐标并施加力)
@@ -39,7 +39,7 @@ class PhysicsEngine:
         
         # 4. 积分更新速度和位置
         for obj in self.objects:
-            if isinstance(obj, Spring):
+            if isinstance(obj, Spring) or getattr(obj, "static", False):
                 continue
             obj.vel += obj.acc * dt
             obj.pos += obj.vel * dt

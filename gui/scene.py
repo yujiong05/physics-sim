@@ -9,8 +9,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QPointF, QRectF
 from PyQt5.QtGui import QBrush, QPen, QColor, QPainterPath
 import numpy as np
 
-# 导入物理模型
-from core.models import Ball, Block, Spring
+from core.models import Ball, Block, Spring, StaticBlock, Groove
 
 # ─────────────────────────────────────────────────────────
 # 公共 mixin：速度箭头 + 轨迹线
@@ -108,6 +107,66 @@ class BlockItem(_TrailArrowMixin, QGraphicsRectItem):
         self.setBrush(QBrush(QColor(self.obj.color)))
         self.setPos(self.obj.pos[0], self.obj.pos[1])
         self.update_velocity_arrow()
+
+
+class StaticBlockItem(QGraphicsRectItem):
+    def __init__(self, obj, parent=None):
+        super().__init__(-obj.width / 2, -obj.height / 2, obj.width, obj.height, parent)
+        self.obj = obj
+        self.setBrush(QBrush(QColor(obj.color)))
+        self.setPen(QPen(Qt.black, 1))
+        self.setZValue(12)
+        self.setRotation(obj.angle)
+        self.setFlags(QGraphicsItem.ItemIsSelectable | QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemSendsGeometryChanges)
+        self.setPos(obj.pos[0], obj.pos[1])
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemPositionHasChanged:
+            self.obj.pos[0], self.obj.pos[1] = self.pos().x(), self.pos().y()
+        return super().itemChange(change, value)
+
+    def update_appearance(self):
+        self.setRect(-self.obj.width / 2, -self.obj.height / 2, self.obj.width, self.obj.height)
+        self.setBrush(QBrush(QColor(self.obj.color)))
+        self.setPos(self.obj.pos[0], self.obj.pos[1])
+        self.setRotation(self.obj.angle)
+
+class GrooveItem(QGraphicsPathItem):
+    def __init__(self, obj, parent=None):
+        super().__init__(parent)
+        self.obj = obj
+        self.setBrush(QBrush(QColor(obj.color)))
+        self.setPen(QPen(Qt.black, 1))
+        self.setZValue(12)
+        self.setFlags(QGraphicsItem.ItemIsSelectable | QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemSendsGeometryChanges)
+        self.update_appearance()
+        self.setPos(obj.pos[0], obj.pos[1])
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemPositionHasChanged:
+            self.obj.pos[0], self.obj.pos[1] = self.pos().x(), self.pos().y()
+        return super().itemChange(change, value)
+
+    def update_appearance(self):
+        self.setBrush(QBrush(QColor(self.obj.color)))
+        path = QPainterPath()
+        
+        r_in = self.obj.radius
+        r_out = self.obj.radius + self.obj.thickness
+        
+        path.moveTo(-r_out, 0)
+        path.lineTo(-r_in, 0)
+        # 从左到右画内半圆 (下半圆)
+        path.arcTo(QRectF(-r_in, -r_in, 2*r_in, 2*r_in), 180, 180)
+        
+        path.lineTo(r_out, 0)
+        path.lineTo(r_out, r_out)
+        path.lineTo(-r_out, r_out)
+        path.closeSubpath()
+        
+        self.setPath(path)
+        self.setPos(self.obj.pos[0], self.obj.pos[1])
+
 
 
 # ─────────────────────────────────────────────────────────
@@ -371,6 +430,16 @@ class PhysicsScene(QGraphicsScene):
             self.items_dict[obj] = item
             item.rebuild_path()
             return
+        elif isinstance(obj, StaticBlock):
+            item = StaticBlockItem(obj)
+            self.addItem(item)
+            self.items_dict[obj] = item
+            return
+        elif isinstance(obj, Groove):
+            item = GrooveItem(obj)
+            self.addItem(item)
+            self.items_dict[obj] = item
+            return
         else: return
         item.set_show_velocity_arrow(self.show_velocity_arrow)
         item.set_show_trail(self.show_trail)
@@ -391,6 +460,14 @@ class PhysicsScene(QGraphicsScene):
         for obj, item in self.items_dict.items():
             if isinstance(item, SpringItem):
                 item.update_appearance(playing=playing)
+                continue
+            elif isinstance(item, StaticBlockItem):
+                # StaticBlock doesn't move or have trails
+                item.setPos(obj.pos[0], obj.pos[1])
+                item.setRotation(obj.angle)
+                continue
+            elif isinstance(item, GrooveItem):
+                item.setPos(obj.pos[0], obj.pos[1])
                 continue
             item.setPos(obj.pos[0], obj.pos[1])
             item.update_velocity_arrow()

@@ -9,7 +9,7 @@ import math
 
 from gui.scene import PhysicsScene
 from core.engine import PhysicsEngine
-from core.models import Ball, Block, Spring
+from core.models import Ball, Block, Spring, StaticBlock, Groove
 from gui.property_panel import PropertyPanel
 from gui.object_create_panel import ObjectCreatePanel
 from gui.data_panel import DataPanel
@@ -32,6 +32,10 @@ class MainWindow(QMainWindow):
         self.ball_counter = 1
         self.block_counter = 1
         self.spring_counter = 1
+        self.platform_counter = 1
+        self.wall_counter = 1
+        self.ramp_counter = 1
+        self.groove_counter = 1
         self.initial_state_snapshot = None
         self.current_file_path = None
 
@@ -39,23 +43,24 @@ class MainWindow(QMainWindow):
         self.create_menus()
         self.create_template_menu()
         self.init_ui()
-        self.init_ui()
         self.clear_scene()
         
     def update_name_counters_from_scene(self):
         import re
-        max_ball, max_block, max_spring = 0, 0, 0
+        max_c = {"ball":0, "block":0, "spring":0, "platform":0, "wall":0, "ramp":0, "groove":0}
         for obj in self.engine.objects:
-            m = re.match(r'(ball|block|spring)(\d+)', obj.name.lower())
+            m = re.match(r'(ball|block|spring|platform|wall|ramp|groove)(\d+)', obj.name.lower())
             if m:
                 typ, num = m.groups()
                 num = int(num)
-                if typ == 'ball' and num > max_ball: max_ball = num
-                elif typ == 'block' and num > max_block: max_block = num
-                elif typ == 'spring' and num > max_spring: max_spring = num
-        self.ball_counter = max(self.ball_counter, max_ball + 1)
-        self.block_counter = max(self.block_counter, max_block + 1)
-        self.spring_counter = max(self.spring_counter, max_spring + 1)
+                if typ in max_c and num > max_c[typ]: max_c[typ] = num
+        self.ball_counter = max(self.ball_counter, max_c["ball"] + 1)
+        self.block_counter = max(self.block_counter, max_c["block"] + 1)
+        self.spring_counter = max(self.spring_counter, max_c["spring"] + 1)
+        self.platform_counter = max(self.platform_counter, max_c["platform"] + 1)
+        self.wall_counter = max(self.wall_counter, max_c["wall"] + 1)
+        self.ramp_counter = max(self.ramp_counter, max_c["ramp"] + 1)
+        self.groove_counter = max(self.groove_counter, max_c["groove"] + 1)
         
     def get_next_default_name(self, object_type):
         if object_type == "ball":
@@ -67,6 +72,18 @@ class MainWindow(QMainWindow):
         elif object_type == "spring":
             name = f"spring{self.spring_counter}"
             self.spring_counter += 1
+        elif object_type == "platform":
+            name = f"platform{self.platform_counter}"
+            self.platform_counter += 1
+        elif object_type == "wall":
+            name = f"wall{self.wall_counter}"
+            self.wall_counter += 1
+        elif object_type == "ramp":
+            name = f"ramp{self.ramp_counter}"
+            self.ramp_counter += 1
+        elif object_type == "groove":
+            name = f"groove{self.groove_counter}"
+            self.groove_counter += 1
         else:
             name = f"{object_type}_1"
         return name
@@ -99,6 +116,8 @@ class MainWindow(QMainWindow):
             if t == "ball": objects.append(Ball.from_state(obj_data))
             elif t == "block": objects.append(Block.from_state(obj_data))
             elif t == "spring": objects.append(Spring.from_state(obj_data))
+            elif t == "static_block": objects.append(StaticBlock.from_state(obj_data))
+            elif t == "groove": objects.append(Groove.from_state(obj_data))
             
         for obj in objects:
             self.engine.add_object(obj)
@@ -203,6 +222,10 @@ class MainWindow(QMainWindow):
         self.ball_counter = counters.get("ball", 1)
         self.block_counter = counters.get("block", 1)
         self.spring_counter = counters.get("spring", 1)
+        self.platform_counter = counters.get("platform", 1)
+        self.wall_counter = counters.get("wall", 1)
+        self.ramp_counter = counters.get("ramp", 1)
+        self.groove_counter = counters.get("groove", 1)
 
         # 实验模式同步
         mode = scene_data.get("experiment_mode", "vertical")
@@ -237,7 +260,9 @@ class MainWindow(QMainWindow):
                     "show_trail": self.scene.show_trail,
                     "experiment_mode": "horizontal" if self.create_panel.rb_horizontal.isChecked() else "vertical"
                 }
-                counters = {"ball": self.ball_counter, "block": self.block_counter, "spring": self.spring_counter}
+                counters = {"ball": self.ball_counter, "block": self.block_counter, "spring": self.spring_counter,
+                            "platform": self.platform_counter, "wall": self.wall_counter, "ramp": self.ramp_counter,
+                            "groove": self.groove_counter}
                 save_project(self.current_file_path, self.engine, counters, scene_data)
                 self.setWindowTitle(f"二维物理仿真实验室 - {self.current_file_path}")
             except Exception as e:
@@ -346,22 +371,23 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"等待在画布上放置: {object_type}")
 
     def create_object_at(self, object_type, x, y, params):
-        obj = None
+        objects_to_add = []
         name = params.get("name", "").strip()
         if not name or name.lower() in ["ball", "block", "spring", "未命名"]:
             name = self.get_next_default_name(object_type)
-        
         
         if object_type == "ball":
             obj = Ball(x=x, y=y, radius=params["radius"], mass=params["mass"], name=name)
             obj.vel = np.array([params["vx"], params["vy"]], dtype=np.float64)
             obj.restitution = params["restitution"]
             obj.color = params["color"]
+            objects_to_add.append(obj)
         elif object_type == "block":
             obj = Block(x=x, y=y, width=params["width"], height=params["height"], mass=params["mass"], name=name)
             obj.vel = np.array([params["vx"], params["vy"]], dtype=np.float64)
             obj.restitution = params["restitution"]
             obj.color = params["color"]
+            objects_to_add.append(obj)
         elif object_type == "spring":
             length = params["length"]
             angle_rad = math.radians(params["angle"])
@@ -370,10 +396,25 @@ class MainWindow(QMainWindow):
             obj = Spring(start_pos=[x, y], end_pos=[end_x, end_y], 
                          stiffness=params["stiffness"], damping=params["damping"], 
                          rest_length=params["rest_length"], name=name, color=params["color"])
+            objects_to_add.append(obj)
+        elif object_type in ["platform", "wall", "ramp"]:
+            obj = StaticBlock(x=x, y=y, width=params["width"], height=params["height"], 
+                              angle=params["angle"], name=name)
+            obj.restitution = params["restitution"]
+            obj.friction = params["friction"]
+            obj.color = params["color"]
+            objects_to_add.append(obj)
+        elif object_type == "groove":
+            obj = Groove(x=x, y=y, radius=params["radius"], thickness=params["thickness"], name=name)
+            obj.restitution = params["restitution"]
+            obj.friction = params["friction"]
+            obj.color = params["color"]
+            objects_to_add.append(obj)
         
-        if obj:
-            self.engine.add_object(obj)
-            self.scene.add_physics_object(obj)
+        if objects_to_add:
+            for obj in objects_to_add:
+                self.engine.add_object(obj)
+                self.scene.add_physics_object(obj)
             self.data_panel.refresh_objects(self.engine.objects)
             if not self.is_playing: self.capture_initial_state()
             self.statusBar().showMessage(f"已创建: {name}")
@@ -401,6 +442,10 @@ class MainWindow(QMainWindow):
         self.ball_counter = 1
         self.block_counter = 1
         self.spring_counter = 1
+        self.platform_counter = 1
+        self.wall_counter = 1
+        self.ramp_counter = 1
+        self.groove_counter = 1
         if not self.is_playing: self.capture_initial_state()
 
     def on_object_selected(self, obj):

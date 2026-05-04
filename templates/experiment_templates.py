@@ -117,6 +117,20 @@ def block_collision():
     }
 
 
+def _static_block(name, x, y, width=300.0, height=30.0, angle=0.0, restitution=0.8, friction=0.2):
+    return {
+        "type": "static_block",
+        "name": name,
+        "pos": [float(x), float(y)],
+        "vel": [0.0, 0.0],
+        "acc": [0.0, 0.0],
+        "width": float(width),
+        "height": float(height),
+        "angle": float(angle),
+        "restitution": float(restitution),
+        "friction": float(friction)
+    }
+
 # ──────────────────────────────────────────────────────────
 # 6. 球撞方块实验
 # ──────────────────────────────────────────────────────────
@@ -132,6 +146,47 @@ def ball_hits_block():
         ]
     }
 
+# ──────────────────────────────────────────────────────────
+# 7. 小球落入凹槽实验
+# ──────────────────────────────────────────────────────────
+def ball_drop_into_groove():
+    return {
+        "name": "小球落入凹槽实验",
+        "engine": _engine_defaults(),
+        "ball_counter": 2,
+        "scene": {"show_velocity_arrow": True, "show_trail": True},
+        "objects": [
+            _ball("Ball_1", x=400, y=100, vx=0, vy=0, radius=20, mass=1.0, restitution=0.6),
+            {
+                "type": "groove",
+                "name": "groove1",
+                "center_pos": [400.0, 430.0],
+                "radius": 160.0,
+                "thickness": 20.0,
+                "start_angle": 0.0,
+                "end_angle": 180.0,
+                "restitution": 0.8,
+                "friction": 0.2,
+                "color": "#808080"
+            }
+        ]
+    }
+
+# ──────────────────────────────────────────────────────────
+# 8. 斜面滚落实验
+# ──────────────────────────────────────────────────────────
+def ball_roll_down_ramp():
+    return {
+        "name": "斜面滚落实验",
+        "engine": _engine_defaults(),
+        "ball_counter": 2,
+        "scene": {"show_velocity_arrow": True, "show_trail": True},
+        "objects": [
+            _ball("Ball_1", x=200, y=150, vx=0, vy=0, radius=20, mass=1.0, restitution=0.5),
+            _static_block("Ramp_1", x=400, y=400, width=600, height=30, angle=20)
+        ]
+    }
+
 
 # ──────────────────────────────────────────────────────────
 # 所有模板注册表（用于菜单生成）
@@ -143,4 +198,6 @@ ALL_TEMPLATES = [
     mass_collision,
     block_collision,
     ball_hits_block,
+    ball_drop_into_groove,
+    ball_roll_down_ramp,
 ]

@@ -137,3 +137,97 @@ class Spring:
         spring.start_local_offset = np.array(data.get("start_local_offset", [0.0, 0.0]), dtype=np.float64)
         spring.end_local_offset = np.array(data.get("end_local_offset", [0.0, 0.0]), dtype=np.float64)
         return spring
+
+class StaticBlock:
+    def __init__(self, x, y, width=100.0, height=20.0, angle=0.0, name="StaticBlock"):
+        self.id = uuid.uuid4().hex
+        self.type = "static_block"
+        self.name = name
+        self.pos = np.array([x, y], dtype=np.float64)
+        self.width = width
+        self.height = height
+        self.angle = angle
+        self.restitution = 0.8
+        self.friction = 0.2
+        self.color = "#808080"
+        self.static = True
+
+    def get_state(self):
+        return {
+            "type": self.type,
+            "id": self.id,
+            "name": self.name,
+            "pos": self.pos.tolist(),
+            "width": float(self.width),
+            "height": float(self.height),
+            "angle": float(self.angle),
+            "restitution": float(self.restitution),
+            "friction": float(self.friction),
+            "color": self.color,
+            "static": self.static
+        }
+
+    @classmethod
+    def from_state(cls, data):
+        pos = data.get("pos", [0.0, 0.0])
+        block = cls(x=pos[0], y=pos[1], width=data.get("width", 100.0),
+                    height=data.get("height", 20.0), angle=data.get("angle", 0.0),
+                    name=data.get("name", "StaticBlock"))
+        block.id = data.get("id", uuid.uuid4().hex)
+        block.restitution = data.get("restitution", 0.8)
+        block.friction = data.get("friction", 0.2)
+        block.color = data.get("color", "#808080")
+        return block
+
+class Groove:
+    def __init__(self, x, y, radius=150.0, thickness=20.0, name="Groove"):
+        self.id = uuid.uuid4().hex
+        self.type = "groove"
+        self.name = name
+        self.center_pos = np.array([x, y], dtype=np.float64)
+        self.radius = radius
+        self.thickness = thickness
+        self.start_angle = 0.0
+        self.end_angle = 180.0
+        self.restitution = 0.8
+        self.friction = 0.2
+        self.color = "#808080"
+        self.static = True
+
+    @property
+    def pos(self):
+        # Alias for compatibility with scene placement/selection logic
+        return self.center_pos
+
+    @pos.setter
+    def pos(self, value):
+        self.center_pos = np.array(value, dtype=np.float64)
+
+    def get_state(self):
+        return {
+            "type": self.type,
+            "id": self.id,
+            "name": self.name,
+            "center_pos": self.center_pos.tolist(),
+            "radius": float(self.radius),
+            "thickness": float(self.thickness),
+            "start_angle": float(self.start_angle),
+            "end_angle": float(self.end_angle),
+            "restitution": float(self.restitution),
+            "friction": float(self.friction),
+            "color": self.color,
+            "static": self.static
+        }
+
+    @classmethod
+    def from_state(cls, data):
+        c_pos = data.get("center_pos", [0.0, 0.0])
+        groove = cls(x=c_pos[0], y=c_pos[1], radius=data.get("radius", 150.0),
+                     thickness=data.get("thickness", 20.0), name=data.get("name", "Groove"))
+        groove.id = data.get("id", uuid.uuid4().hex)
+        groove.start_angle = data.get("start_angle", 0.0)
+        groove.end_angle = data.get("end_angle", 180.0)
+        groove.restitution = data.get("restitution", 0.8)
+        groove.friction = data.get("friction", 0.2)
+        groove.color = data.get("color", "#808080")
+        return groove
