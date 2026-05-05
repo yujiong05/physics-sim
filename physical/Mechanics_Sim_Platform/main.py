@@ -55,9 +55,9 @@ def get_platform_qss() -> str:
             color: #3b82f6;
             border: 1px solid #dbeafe;
             border-radius: 10px;
-            padding: 8px 16px;
+            padding: 11px 18px;
             font-weight: 600;
-            font-size: 10.5pt;
+            font-size: 11.5pt;
             margin-top: 10px;
         }
         QPushButton#backToMenuBtn:hover {
@@ -215,7 +215,7 @@ class MainWindow(QMainWindow):
     def _create_back_btn(self) -> QPushButton:
         btn = QPushButton("返回主菜单")
         btn.setObjectName("backToMenuBtn")
-        btn.setFixedWidth(140)
+        btn.setFixedWidth(168)
         btn.setCursor(Qt.PointingHandCursor)
         btn.clicked.connect(lambda: self._on_nav_changed(0))
         return btn

@@ -15,7 +15,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.patches import Circle, Rectangle
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor, QPixmap
+from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QButtonGroup,
     QDoubleSpinBox,
@@ -39,6 +39,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ui.markdown_viewer import MarkdownFormulaViewer
+from ui.scalable_textbook_image import ScalableTextbookImage
 from engine.billiards_box import (
     BilliardsState,
     clamp_positions,
@@ -53,6 +54,11 @@ from ui.teaching_chat_helper import TeachingChatHelper
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _TEXTBOOK_PATH = _PROJECT_ROOT / "assets" / "long_images" / "碰撞模型.png"
+
+_LAB_FORMULA_STYLE = (
+    "background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;"
+    "padding:16px;color:#334155;font-size:13pt;line-height:165%;"
+)
 
 BOX_W = 1.0
 BOX_H = 0.65
@@ -77,6 +83,7 @@ class PageCollision(QWidget):
         super().__init__(parent)
         self._timer = QTimer(self)
         self._timer.setInterval(16)
+        self._timer.setTimerType(Qt.PreciseTimer)
         self._timer.timeout.connect(self._on_tick)
 
         self._state: Optional[BilliardsState] = None
@@ -133,13 +140,18 @@ class PageCollision(QWidget):
                 border: 1px solid #e2e8f0;
                 border-radius: 14px;
             }
+            QDoubleSpinBox, QSpinBox {
+                font-size: 11pt;
+                min-height: 30px;
+            }
             QPushButton.SecondaryBtn {
                 background-color: #e2e8f0;
                 color: #1e293b;
                 border: none;
                 border-radius: 10px;
-                padding: 10px 16px;
+                padding: 12px 18px;
                 font-weight: 600;
+                font-size: 11pt;
             }
             QPushButton.SecondaryBtn:hover { background-color: #cbd5e1; }
             QPushButton.PrimaryXL {
@@ -147,9 +159,9 @@ class PageCollision(QWidget):
                 color: #ffffff;
                 border: none;
                 border-radius: 14px;
-                padding: 18px 24px;
+                padding: 20px 26px;
                 font-weight: 700;
-                font-size: 13pt;
+                font-size: 14pt;
             }
             QPushButton.PrimaryXL:hover { background-color: #2563eb; }
             QPushButton.ToolBtn {
@@ -157,8 +169,9 @@ class PageCollision(QWidget):
                 color: #ffffff;
                 border: none;
                 border-radius: 10px;
-                padding: 10px 14px;
+                padding: 12px 18px;
                 font-weight: 600;
+                font-size: 11pt;
             }
             QPushButton.ToolBtn:hover { background-color: #2563eb; }
             QPushButton.ToolBtn:disabled {
@@ -168,8 +181,9 @@ class PageCollision(QWidget):
             QLineEdit.ChatInput {
                 border: 1px solid #cbd5e1;
                 border-radius: 10px;
-                padding: 10px 12px;
+                padding: 11px 13px;
                 background: #ffffff;
+                font-size: 11pt;
             }
             QLineEdit.ParamEdit {
                 border: 1px solid #cbd5e1;
@@ -196,7 +210,7 @@ class PageCollision(QWidget):
                 margin: -6px 0;
                 border-radius: 8px;
             }
-            QRadioButton { spacing: 8px; color: #334155; }
+            QRadioButton { spacing: 8px; color: #334155; font-size: 11pt; }
             """
         )
 
@@ -217,28 +231,21 @@ class PageCollision(QWidget):
         left_inner = QWidget()
         left_lay = QVBoxLayout(left_inner)
         title_l = QLabel("教材讲解")
-        title_l.setStyleSheet("font-weight:600;font-size:12pt;color:#0f172a;")
+        title_l.setStyleSheet("font-weight:600;font-size:13.5pt;color:#0f172a;")
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setAlignment(Qt.AlignTop)
 
-        pic = QLabel()
-        pic.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-
-        if _TEXTBOOK_PATH.is_file():
-            pix = QPixmap(str(_TEXTBOOK_PATH))
-            if not pix.isNull():
-                pic.setPixmap(pix.scaledToWidth(760, Qt.SmoothTransformation))
-            else:
-                pic.setText("无法解码 collision_textbook.png。")
-        else:
-            pic.setText(
+        pic = ScalableTextbookImage(
+            _TEXTBOOK_PATH,
+            decode_fail_text="无法解码 collision_textbook.png。",
+            missing_file_text=(
                 "未找到 assets/collision_textbook.png。\n"
                 "放入教材插图后可在此展示；当前为占位提示。"
-            )
-            pic.setWordWrap(True)
+            ),
+        )
 
         scroll.setWidget(pic)
         left_lay.addWidget(title_l)
@@ -249,7 +256,7 @@ class PageCollision(QWidget):
         rl.setSpacing(14)
 
         title_r = QLabel("智能助教")
-        title_r.setStyleSheet("font-weight:600;font-size:12pt;color:#0f172a;")
+        title_r.setStyleSheet("font-weight:600;font-size:13.5pt;color:#0f172a;")
 
         self._chat_log = MarkdownFormulaViewer()
         self._chat_log.set_markdown(
@@ -270,7 +277,7 @@ class PageCollision(QWidget):
 
         btn_lab = QPushButton("进入仿真实验室")
         btn_lab.setObjectName("PrimaryXL")
-        btn_lab.setMinimumHeight(56)
+        btn_lab.setMinimumHeight(62)
         btn_lab.setCursor(Qt.PointingHandCursor)
         btn_lab.clicked.connect(lambda: self._stack.setCurrentIndex(1))
 
@@ -290,7 +297,7 @@ class PageCollision(QWidget):
         root.setSpacing(16)
 
         ctrl = QWidget()
-        ctrl.setMinimumWidth(360)
+        ctrl.setMinimumWidth(390)
         ctrl.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         cv = QVBoxLayout(ctrl)
         cv.setSpacing(12)
@@ -318,15 +325,11 @@ class PageCollision(QWidget):
             f"为沿 x 轴的一维对碰；<strong>质量越大半径越大</strong>（∝ m<sup>1/3</sup>）。"
         )
         geo.setWordWrap(True)
-        geo.setStyleSheet(
-            "background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px;color:#334155;"
-        )
+        geo.setStyleSheet(_LAB_FORMULA_STYLE)
 
         self._formula_lab = QLabel()
         self._formula_lab.setWordWrap(True)
-        self._formula_lab.setStyleSheet(
-            "background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px;color:#334155;"
-        )
+        self._formula_lab.setStyleSheet(_LAB_FORMULA_STYLE)
         self._update_formula_text()
 
         form = QFormLayout()
@@ -450,19 +453,19 @@ class PageCollision(QWidget):
         btn_row.setSpacing(10)
         self._btn_start = QPushButton("开始仿真")
         self._btn_start.setObjectName("PrimaryXL")
-        self._btn_start.setMinimumHeight(48)
+        self._btn_start.setMinimumHeight(54)
         self._btn_start.setCursor(Qt.PointingHandCursor)
         self._btn_start.clicked.connect(self._on_start_simulation)
 
         self._btn_pause = QPushButton("暂停")
         self._btn_pause.setObjectName("SecondaryBtn")
-        self._btn_pause.setMinimumHeight(48)
+        self._btn_pause.setMinimumHeight(54)
         self._btn_pause.setCursor(Qt.PointingHandCursor)
         self._btn_pause.clicked.connect(self._on_pause_toggle)
 
         self._btn_reset = QPushButton("重置")
         self._btn_reset.setObjectName("ToolBtn")
-        self._btn_reset.setMinimumHeight(48)
+        self._btn_reset.setMinimumHeight(54)
         self._btn_reset.setCursor(Qt.PointingHandCursor)
         self._btn_reset.clicked.connect(self._full_reset)
 
@@ -476,14 +479,14 @@ class PageCollision(QWidget):
             "暂停时可改参数；重置会回到初始位置并停止。质量改变半径。"
         )
         hint.setWordWrap(True)
-        hint.setStyleSheet("color:#64748b;font-size:10pt;")
+        hint.setStyleSheet("color:#64748b;font-size:12pt;line-height:155%;")
 
         cv.addWidget(btn_back)
         cv.addLayout(mode_row)
         cv.addWidget(geo)
         cv.addWidget(self._formula_lab)
         title_params = QLabel("参数")
-        title_params.setStyleSheet("font-weight:700;font-size:11pt;color:#0f172a;")
+        title_params.setStyleSheet("font-weight:700;font-size:12.5pt;color:#0f172a;")
         cv.addWidget(title_params)
         cv.addLayout(form)
         cv.addLayout(playback_row)
@@ -555,7 +558,7 @@ class PageCollision(QWidget):
         sp.addWidget(self._wrap_card(plot, margins=(12, 12, 12, 12)))
         sp.setStretchFactor(0, 30)
         sp.setStretchFactor(1, 70)
-        sp.setSizes([380, 920])
+        sp.setSizes([400, 900])
 
         root.addWidget(sp)
         return page
@@ -810,8 +813,13 @@ class PageCollision(QWidget):
             t1 = max(0.0, t_end - _TIME_WINDOW)
             self._ax_energy.set_xlim(t1, t_end + 1e-6)
 
-        self._ax_energy.relim()
-        self._ax_energy.autoscale_view(scalex=False, scaley=True)
+        ke_arr = np.asarray(self._hist_ke, dtype=float)
+        loss_arr = np.asarray(self._hist_loss, dtype=float)
+        both = np.concatenate([ke_arr, loss_arr])
+        lo = float(np.min(both))
+        hi = float(np.max(both))
+        span = max(hi - lo, 0.01)
+        self._ax_energy.set_ylim(lo - 0.1 * span, hi + 0.12 * span)
 
     def _sync_graphics(self) -> None:
         if self._state is None:

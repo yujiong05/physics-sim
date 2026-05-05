@@ -76,7 +76,7 @@ BASE_HTML_TEMPLATE = r"""
         
         body {{
             font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
-            font-size: 15px;
+            font-size: 17px;
             line-height: 1.75;
             color: var(--text-color);
         }}

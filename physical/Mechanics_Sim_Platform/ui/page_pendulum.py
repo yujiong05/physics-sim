@@ -13,7 +13,7 @@ import numpy as np
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor, QPixmap
+from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
@@ -34,6 +34,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ui.markdown_viewer import MarkdownFormulaViewer
+from ui.scalable_textbook_image import ScalableTextbookImage
 from engine.pendulum_calc import G_DEFAULT, state_cartesian, state_mechanics, step_double_pendulum_rk4
 from ui.mpl_setup import configure_matplotlib_chinese_font
 from ui.teaching_chat_helper import TeachingChatHelper
@@ -46,6 +47,12 @@ _PHASE_MAXLEN = 2500
 _ENERGY_MAXLEN = 3500
 
 TIMER_MS = 16
+
+_LAB_FORMULA_STYLE = (
+    "background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;"
+    "padding:16px;color:#334155;font-size:13pt;line-height:165%;"
+)
+_LAB_SECTION_TITLE_STYLE = "font-weight:600;font-size:13pt;color:#0f172a;padding-bottom:4px;"
 
 
 def _card_shadow(widget: QWidget, blur: int = 22, dy: int = 3) -> None:
@@ -63,6 +70,7 @@ class PagePendulum(QWidget):
         super().__init__(parent)
         self._timer = QTimer(self)
         self._timer.setInterval(TIMER_MS)
+        self._timer.setTimerType(Qt.PreciseTimer)
         self._timer.timeout.connect(self._on_tick)
 
         self._y: Optional[np.ndarray] = None
@@ -88,6 +96,7 @@ class PagePendulum(QWidget):
         self._ax_anim = None
         self._ax_phase = None
         self._ax_energy = None
+        self._phase_frame_i = 0
 
         configure_matplotlib_chinese_font()
         self._chat_ai = TeachingChatHelper(self, "pendulum")
@@ -121,13 +130,18 @@ class PagePendulum(QWidget):
                 border: 1px solid #e2e8f0;
                 border-radius: 14px;
             }
+            QDoubleSpinBox, QSpinBox {
+                font-size: 11pt;
+                min-height: 30px;
+            }
             QPushButton.SecondaryBtn {
                 background-color: #e2e8f0;
                 color: #1e293b;
                 border: none;
                 border-radius: 10px;
-                padding: 10px 16px;
+                padding: 12px 18px;
                 font-weight: 600;
+                font-size: 11pt;
             }
             QPushButton.SecondaryBtn:hover { background-color: #cbd5e1; }
             QPushButton.SecondaryBtn:disabled {
@@ -139,9 +153,9 @@ class PagePendulum(QWidget):
                 color: #ffffff;
                 border: none;
                 border-radius: 14px;
-                padding: 18px 24px;
+                padding: 20px 26px;
                 font-weight: 700;
-                font-size: 13pt;
+                font-size: 14pt;
             }
             QPushButton.PrimaryXL:hover { background-color: #2563eb; }
             QPushButton.ToolBtn {
@@ -149,8 +163,9 @@ class PagePendulum(QWidget):
                 color: #ffffff;
                 border: none;
                 border-radius: 10px;
-                padding: 10px 14px;
+                padding: 12px 18px;
                 font-weight: 600;
+                font-size: 11pt;
             }
             QPushButton.ToolBtn:hover { background-color: #2563eb; }
             QPushButton.ToolBtn:disabled {
@@ -160,8 +175,9 @@ class PagePendulum(QWidget):
             QLineEdit.ChatInput {
                 border: 1px solid #cbd5e1;
                 border-radius: 10px;
-                padding: 10px 12px;
+                padding: 11px 13px;
                 background: #ffffff;
+                font-size: 11pt;
             }
             QTextBrowser.ChatLog {
                 border: 1px solid #e2e8f0;
@@ -200,28 +216,21 @@ class PagePendulum(QWidget):
         left_inner = QWidget()
         left_lay = QVBoxLayout(left_inner)
         title_l = QLabel("教材讲解")
-        title_l.setStyleSheet("font-weight:600;font-size:12pt;color:#0f172a;")
+        title_l.setStyleSheet("font-weight:600;font-size:13.5pt;color:#0f172a;")
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setAlignment(Qt.AlignTop)
 
-        pic = QLabel()
-        pic.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-
-        if _TEXTBOOK_PATH.is_file():
-            pix = QPixmap(str(_TEXTBOOK_PATH))
-            if not pix.isNull():
-                pic.setPixmap(pix.scaledToWidth(720, Qt.SmoothTransformation))
-            else:
-                pic.setText("无法解码 pendulum_textbook.png。")
-        else:
-            pic.setText(
+        pic = ScalableTextbookImage(
+            _TEXTBOOK_PATH,
+            decode_fail_text="无法解码 pendulum_textbook.png。",
+            missing_file_text=(
                 "未找到 assets/pendulum_textbook.png。\n"
                 "放入教材插图后可在此展示；当前为占位提示。"
-            )
-            pic.setWordWrap(True)
+            ),
+        )
 
         scroll.setWidget(pic)
         left_lay.addWidget(title_l)
@@ -232,7 +241,7 @@ class PagePendulum(QWidget):
         rl.setSpacing(14)
 
         title_r = QLabel("AI 智能助教")
-        title_r.setStyleSheet("font-weight:600;font-size:12pt;color:#0f172a;")
+        title_r.setStyleSheet("font-weight:600;font-size:13.5pt;color:#0f172a;")
 
         self._chat_log = MarkdownFormulaViewer()
         self._chat_log.set_markdown(
@@ -253,7 +262,7 @@ class PagePendulum(QWidget):
 
         btn_lab = QPushButton("进入仿真实验室")
         btn_lab.setObjectName("PrimaryXL")
-        btn_lab.setMinimumHeight(56)
+        btn_lab.setMinimumHeight(62)
         btn_lab.setCursor(Qt.PointingHandCursor)
         btn_lab.clicked.connect(lambda: self._stack.setCurrentIndex(1))
 
@@ -273,6 +282,8 @@ class PagePendulum(QWidget):
         root.setSpacing(16)
 
         ctrl = QWidget()
+        ctrl.setMinimumWidth(390)
+        ctrl.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         cv = QVBoxLayout(ctrl)
         cv.setSpacing(12)
 
@@ -283,9 +294,7 @@ class PagePendulum(QWidget):
 
         self._formula_lab = QLabel()
         self._formula_lab.setWordWrap(True)
-        self._formula_lab.setStyleSheet(
-            "background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;color:#334155;"
-        )
+        self._formula_lab.setStyleSheet(_LAB_FORMULA_STYLE)
         self._formula_lab.setText(
             "<b>状态</b>：<i>y = [θ₁, ω₁, θ₂, ω₂]</i>（rad）。<br/>"
             "<b>阻尼</b>：角加速度叠加 <i>−c·ω₁</i>、<i>−c·ω₂</i>（<i>c=0</i> 时机械能近似守恒）。<br/>"
@@ -410,11 +419,13 @@ class PagePendulum(QWidget):
             "橙色线为 m₂ 拖尾；每帧引擎内 RK4 微步推进。"
         )
         hint.setWordWrap(True)
-        hint.setStyleSheet("color:#64748b;font-size:10pt;")
+        hint.setStyleSheet("color:#64748b;font-size:12pt;line-height:155%;")
 
         cv.addWidget(btn_back)
         cv.addWidget(self._formula_lab)
-        cv.addWidget(QLabel("参数"))
+        title_params = QLabel("参数")
+        title_params.setStyleSheet(_LAB_SECTION_TITLE_STYLE)
+        cv.addWidget(title_params)
         cv.addLayout(form)
         cv.addLayout(btn_row)
         cv.addWidget(hint)
@@ -473,7 +484,7 @@ class PagePendulum(QWidget):
         sp.addWidget(self._wrap_card(plot, margins=(12, 12, 12, 12)))
         sp.setStretchFactor(0, 30)
         sp.setStretchFactor(1, 70)
-        sp.setSizes([320, 760])
+        sp.setSizes([400, 720])
 
         root.addWidget(sp)
         self._refresh_transport_buttons()
@@ -590,6 +601,7 @@ class PagePendulum(QWidget):
         self._sim_time = 0.0
         self._trail.clear()
         self._phase_pts.clear()
+        self._phase_frame_i = 0
         self._reset_energy_buffers()
 
         lim = (L1 + L2) * 1.28 + 0.12
@@ -647,7 +659,10 @@ class PagePendulum(QWidget):
         t_end = float(t_arr[-1])
         win = max(8.0, min(45.0, float(self._spin_tmax.value())))
         self._ax_energy.set_xlim(max(0.0, t_end - win), max(win * 0.1, t_end + 1e-6))
-        all_e = self._energy_ke + self._energy_pe + self._energy_et
+        ke_a = np.asarray(self._energy_ke, dtype=float)
+        pe_a = np.asarray(self._energy_pe, dtype=float)
+        et_a = np.asarray(self._energy_et, dtype=float)
+        all_e = np.concatenate([ke_a, pe_a, et_a])
         lo = float(np.min(all_e))
         hi = float(np.max(all_e))
         span = max(hi - lo, 0.05)
@@ -732,7 +747,9 @@ class PagePendulum(QWidget):
         th2 = float(self._y[2])
         w2 = float(self._y[3])
         self._phase_pts.append((th2, w2))
-        self._expand_phase_limits(th2, w2)
+        if self._phase_frame_i % 3 == 0:
+            self._expand_phase_limits(th2, w2)
+        self._phase_frame_i += 1
 
         if len(self._trail) >= 2:
             xs, ys = zip(*self._trail)

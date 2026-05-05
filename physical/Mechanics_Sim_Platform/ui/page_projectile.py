@@ -12,7 +12,7 @@ import numpy as np
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor, QFont, QPixmap
+from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
@@ -35,6 +35,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ui.markdown_viewer import MarkdownFormulaViewer
+from ui.scalable_textbook_image import ScalableTextbookImage
 from engine.projectile_calc import (
     G_DEFAULT,
     Y_LAUNCH_EPS,
@@ -50,6 +51,13 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 TIMER_MS = 16
 _TEXTBOOK_PATH = _PROJECT_ROOT / "assets" / "long_images" / "带有阻力的抛体运动.png"
+
+# 仿真实验室左侧公式/说明框（字号与留白统一加大）
+_LAB_FORMULA_STYLE = (
+    "background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;"
+    "padding:16px;color:#334155;font-size:13pt;line-height:165%;"
+)
+_LAB_SECTION_TITLE_STYLE = "font-weight:600;font-size:13pt;color:#0f172a;padding-bottom:4px;"
 
 
 def _card_shadow(widget: QWidget, blur: int = 22, dy: int = 3) -> None:
@@ -68,6 +76,7 @@ class PageProjectile(QWidget):
         super().__init__(parent)
         self._timer = QTimer(self)
         self._timer.setInterval(TIMER_MS)  # 约 60 Hz，宏观仿真步长 = TIMER_MS/1000 × 倍速
+        self._timer.setTimerType(Qt.PreciseTimer)
         self._timer.timeout.connect(self._on_animation_tick)
 
         self._paused = False
@@ -140,17 +149,22 @@ class PageProjectile(QWidget):
             }
             QLabel.SectionTitle {
                 font-weight: 600;
-                font-size: 12pt;
+                font-size: 13.5pt;
                 color: #0f172a;
                 padding-bottom: 6px;
+            }
+            QDoubleSpinBox, QSpinBox {
+                font-size: 11pt;
+                min-height: 30px;
             }
             QPushButton.SecondaryBtn {
                 background-color: #e2e8f0;
                 color: #1e293b;
                 border: none;
                 border-radius: 10px;
-                padding: 10px 16px;
+                padding: 12px 18px;
                 font-weight: 600;
+                font-size: 11pt;
             }
             QPushButton.SecondaryBtn:hover {
                 background-color: #cbd5e1;
@@ -160,9 +174,9 @@ class PageProjectile(QWidget):
                 color: #ffffff;
                 border: none;
                 border-radius: 14px;
-                padding: 18px 24px;
+                padding: 20px 26px;
                 font-weight: 700;
-                font-size: 13pt;
+                font-size: 14pt;
             }
             QPushButton.PrimaryXL:hover {
                 background-color: #2563eb;
@@ -175,8 +189,9 @@ class PageProjectile(QWidget):
                 color: #ffffff;
                 border: none;
                 border-radius: 10px;
-                padding: 10px 14px;
+                padding: 12px 18px;
                 font-weight: 600;
+                font-size: 11pt;
             }
             QPushButton.ToolBtn:hover { background-color: #2563eb; }
             QPushButton.ToolBtn:disabled {
@@ -186,8 +201,9 @@ class PageProjectile(QWidget):
             QLineEdit.ChatInput {
                 border: 1px solid #cbd5e1;
                 border-radius: 10px;
-                padding: 10px 12px;
+                padding: 11px 13px;
                 background: #ffffff;
+                font-size: 11pt;
             }
             QLineEdit.ParamEdit {
                 border: 1px solid #cbd5e1;
@@ -237,29 +253,21 @@ class PageProjectile(QWidget):
         left_lay.setSpacing(10)
         title_l = QLabel("教材讲解")
         title_l.setProperty("class", "SectionTitle")
-        title_l.setStyleSheet("font-weight:600;font-size:12pt;color:#0f172a;")
+        title_l.setStyleSheet("font-weight:600;font-size:13.5pt;color:#0f172a;")
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setAlignment(Qt.AlignTop)
 
-        pic_holder = QLabel()
-        pic_holder.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-
-        if _TEXTBOOK_PATH.is_file():
-            pix = QPixmap(str(_TEXTBOOK_PATH))
-            if not pix.isNull():
-                pic_holder.setPixmap(pix.scaledToWidth(780, Qt.SmoothTransformation))
-                pic_holder.setScaledContents(False)
-            else:
-                pic_holder.setText("无法解码教材图片，请检查 assets/projectile_textbook.png 格式。")
-        else:
-            pic_holder.setText(
+        pic_holder = ScalableTextbookImage(
+            _TEXTBOOK_PATH,
+            decode_fail_text="无法解码教材图片，请检查 assets/projectile_textbook.png 格式。",
+            missing_file_text=(
                 "未找到 assets/projectile_textbook.png。\n"
                 "请将教材长图放入该路径后重启应用；当前为占位提示。"
-            )
-            pic_holder.setWordWrap(True)
+            ),
+        )
 
         scroll.setWidget(pic_holder)
         left_lay.addWidget(title_l)
@@ -271,7 +279,7 @@ class PageProjectile(QWidget):
         right_lay.setSpacing(14)
 
         title_r = QLabel("智能助教")
-        title_r.setStyleSheet("font-weight:600;font-size:12pt;color:#0f172a;")
+        title_r.setStyleSheet("font-weight:600;font-size:13.5pt;color:#0f172a;")
 
         self._chat_log = MarkdownFormulaViewer()
         self._chat_log.set_markdown(
@@ -292,7 +300,7 @@ class PageProjectile(QWidget):
 
         btn_lab = QPushButton("进入仿真实验室")
         btn_lab.setObjectName("PrimaryXL")
-        btn_lab.setMinimumHeight(58)
+        btn_lab.setMinimumHeight(62)
         btn_lab.setCursor(Qt.PointingHandCursor)
         btn_lab.clicked.connect(lambda: self._stack.setCurrentIndex(1))
 
@@ -313,6 +321,8 @@ class PageProjectile(QWidget):
 
         # 左侧控制（约 30%）
         ctrl_inner = QWidget()
+        ctrl_inner.setMinimumWidth(390)
+        ctrl_inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         cv = QVBoxLayout(ctrl_inner)
         cv.setSpacing(14)
 
@@ -335,13 +345,12 @@ class PageProjectile(QWidget):
             f"{TIMER_MS} ms UI 节拍 × 回放倍速 作为宏观步长，在引擎内对同一方程做经典 RK4 微步递推得到。"
         )
         formula.setWordWrap(True)
-        formula.setStyleSheet(
-            "background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;color:#334155;"
-        )
+        formula.setStyleSheet(_LAB_FORMULA_STYLE)
 
         form = QFormLayout()
         form.setSpacing(12)
-        form.setLabelAlignment(Qt.AlignRight)
+        form.setHorizontalSpacing(10)
+        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         self._slider_v0 = QSlider(Qt.Horizontal)
         self._slider_v0.setRange(10, 100)
@@ -463,9 +472,13 @@ class PageProjectile(QWidget):
         btn_row.addWidget(self._btn_reset)
 
         cv.addWidget(btn_back)
-        cv.addWidget(QLabel("公式与模型"))
+        title_formula = QLabel("公式与模型")
+        title_formula.setStyleSheet(_LAB_SECTION_TITLE_STYLE)
+        cv.addWidget(title_formula)
         cv.addWidget(formula)
-        cv.addWidget(QLabel("参数与控制"))
+        title_params = QLabel("参数与控制")
+        title_params.setStyleSheet(_LAB_SECTION_TITLE_STYLE)
+        cv.addWidget(title_params)
         cv.addLayout(form)
         cv.addLayout(btn_row)
         cv.addStretch()
@@ -541,6 +554,7 @@ class PageProjectile(QWidget):
         splitter.addWidget(right_card)
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 7)
+        splitter.setSizes([400, 720])
 
         root.addWidget(splitter)
         return page
@@ -760,12 +774,6 @@ class PageProjectile(QWidget):
         self._line_e_ke.set_data([], [])
         self._line_e_pe.set_data([], [])
         self._line_e_tot.set_data([], [])
-        self._ax_v.relim()
-        self._ax_v.autoscale_view()
-        self._ax_y.relim()
-        self._ax_y.autoscale_view()
-        self._ax_e.relim()
-        self._ax_e.autoscale_view()
 
         self._vline_speed.set_visible(True)
         self._vline_height.set_visible(True)
@@ -863,12 +871,50 @@ class PageProjectile(QWidget):
         self._line_e_pe.set_data(t, np.asarray(self._hist_pe, dtype=float))
         self._line_e_tot.set_data(t, np.asarray(self._hist_e, dtype=float))
 
-        self._ax_v.relim()
-        self._ax_v.autoscale_view()
-        self._ax_y.relim()
-        self._ax_y.autoscale_view()
-        self._ax_e.relim()
-        self._ax_e.autoscale_view()
+        self._refresh_macro_axes_limits()
+
+    def _refresh_macro_axes_limits(self) -> None:
+        """按数据显式设置宏观子图坐标范围，避免每帧 relim/autoscale。"""
+        if not self._hist_t:
+            return
+        t_arr = np.asarray(self._hist_t, dtype=float)
+        t_cur = float(t_arr[-1])
+        t_hi = max(t_cur * 1.03, 0.05)
+
+        _, vi = self._line_v_ideal.get_data()
+        vmag = np.hypot(np.asarray(self._hist_vx, dtype=float), np.asarray(self._hist_vy, dtype=float))
+        vmax_candidates = []
+        if len(vi):
+            vmax_candidates.append(float(np.max(np.asarray(vi, dtype=float))))
+        if vmag.size:
+            vmax_candidates.append(float(np.max(vmag)))
+        vmax = max(vmax_candidates) if vmax_candidates else 1.0
+        pad_v = max(vmax * 0.08, 0.25)
+        self._ax_v.set_xlim(0.0, t_hi)
+        self._ax_v.set_ylim(0.0, vmax + pad_v)
+
+        _, yi_ideal = self._line_y_macro_ideal.get_data()
+        y_hist = np.asarray(self._hist_y, dtype=float)
+        ymax = float(np.max(y_hist))
+        ymin = float(np.min(y_hist))
+        if len(yi_ideal):
+            yi_a = np.asarray(yi_ideal, dtype=float)
+            ymax = max(ymax, float(np.max(yi_a)))
+            ymin = min(ymin, float(np.min(yi_a)))
+        yspan = max(ymax - ymin, 1e-6)
+        pad_y = max(yspan * 0.12, 0.05)
+        self._ax_y.set_xlim(0.0, t_hi)
+        self._ax_y.set_ylim(ymin - pad_y * 0.35, ymax + pad_y)
+
+        ke = np.asarray(self._hist_ke, dtype=float)
+        pe = np.asarray(self._hist_pe, dtype=float)
+        et = np.asarray(self._hist_e, dtype=float)
+        stacked = np.concatenate([ke, pe, et])
+        lo = float(np.min(stacked))
+        hi = float(np.max(stacked))
+        span = max(hi - lo, 0.05)
+        self._ax_e.set_xlim(0.0, t_hi)
+        self._ax_e.set_ylim(lo - 0.08 * span, hi + 0.12 * span)
 
     def _on_animation_tick(self) -> None:
         if self._y_drag_state is None or self._drag_finished:
