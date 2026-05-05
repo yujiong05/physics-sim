@@ -106,6 +106,15 @@ class PageCollision(QWidget):
 
         self._saved_e = 0.82
 
+        self._hist_t_prev: List[float] = []
+        self._hist_ke_prev: List[float] = []
+        self._hist_loss_prev: List[float] = []
+        self._hist_run_tag = ""
+        self._energy_prev_caption = ""
+
+        self._line_ke_tot_prev = None
+        self._line_ke_loss_prev = None
+
         configure_matplotlib_chinese_font()
         self._chat_ai = TeachingChatHelper(self, "collision")
         self._build_ui()
@@ -393,6 +402,7 @@ class PageCollision(QWidget):
         self._spin_e.setDecimals(2)
         self._spin_e.setSingleStep(0.05)
         self._spin_e.setValue(0.82)
+        self._spin_e.setToolTip("恢复系数 e：无量纲，0≤e≤1")
         self._slider_e.valueChanged.connect(self._on_slider_e_changed)
         self._spin_e.valueChanged.connect(self._on_spin_e_changed)
 
@@ -400,9 +410,10 @@ class PageCollision(QWidget):
         self._spin_playback.setRange(0.2, 8.0)
         self._spin_playback.setDecimals(2)
         self._spin_playback.setSingleStep(0.1)
-        self._spin_playback.setValue(0.55)
+        self._spin_playback.setValue(3.0)
+        self._spin_playback.setSuffix(" ×")
         self._spin_playback.setToolTip(
-            "回放倍速：相对默认定时步的仿真快慢；默认略慢于 1.00，便于观察碰撞。"
+            "回放倍速（无量纲）：相对默认定时步的仿真快慢；默认略慢于 1.00，便于观察碰撞。"
         )
 
         self._edit_m1 = QLineEdit()
@@ -438,7 +449,7 @@ class PageCollision(QWidget):
         row_e.addWidget(self._edit_e)
         self._e_widget = QWidget()
         self._e_widget.setLayout(row_e)
-        form.addRow("恢复系数 e：", self._e_widget)
+        form.addRow("恢复系数 e（无量纲）：", self._e_widget)
 
         self._refresh_param_edits()
 
@@ -476,6 +487,7 @@ class PageCollision(QWidget):
         hint = QLabel(
             "提示：先点「开始仿真」启动计时；可调回放倍速加快或减慢。"
             "两球始终在场地水平中线对碰（一维沿 x）；方向角仅决定水平速度分量的符号与大小。"
+            "对照不同恢复系数时，能量子图会保留<b>上一次运行</b>的总动能与损失曲线（灰色虚线）。"
             "暂停时可改参数；重置会回到初始位置并停止。质量改变半径。"
         )
         hint.setWordWrap(True)
@@ -547,6 +559,12 @@ class PageCollision(QWidget):
 
         (self._line_ke_tot,) = self._ax_energy.plot([], [], drawstyle="default", color="#16a34a", linewidth=1.7, label="总动能")
         (self._line_ke_loss,) = self._ax_energy.plot([], [], drawstyle="default", color="#ef4444", linewidth=1.5, label="动能损失（相对基准）")
+        (self._line_ke_tot_prev,) = self._ax_energy.plot(
+            [], [], drawstyle="default", linestyle="--", color="#64748b", linewidth=1.35, alpha=0.72, label="上次 总动能"
+        )
+        (self._line_ke_loss_prev,) = self._ax_energy.plot(
+            [], [], drawstyle="default", linestyle="--", color="#94a3b8", linewidth=1.2, alpha=0.68, label="上次 损失"
+        )
         self._ax_energy.legend(loc="upper right", fontsize=8, framealpha=0.92)
 
         self._canvas = FigureCanvas(self._fig)
@@ -698,6 +716,11 @@ class PageCollision(QWidget):
     def _ball_e(self) -> float:
         return 1.0 if self._is_elastic_mode() else float(self._spin_e.value())
 
+    def _make_collision_run_label(self) -> str:
+        if self._is_elastic_mode():
+            return "弹性 e=1"
+        return f"e={self._ball_e():.2f}"
+
     def _constrain_to_horizontal_line(self) -> None:
         """两球限制在场地水平中线：y 钳制、vy=0（一维沿 x 对碰）。"""
         if self._state is None:
@@ -721,6 +744,11 @@ class PageCollision(QWidget):
         self._sim_time = 0.0
         self._paused = False
         self._btn_pause.setText("暂停")
+        if len(self._hist_t) > 0:
+            self._hist_t_prev = list(self._hist_t)
+            self._hist_ke_prev = list(self._hist_ke)
+            self._hist_loss_prev = list(self._hist_loss)
+            self._energy_prev_caption = self._hist_run_tag
         self._clear_history()
         try:
             self._state = make_state(
@@ -742,6 +770,7 @@ class PageCollision(QWidget):
         clamp_positions(self._state, BOX_W, BOX_H)
         self._constrain_to_horizontal_line()
         self._ke_baseline = kinetic_energy(self._state)
+        self._hist_run_tag = self._make_collision_run_label()
         self._sync_graphics()
         self._update_plot_lines()
         self._canvas.draw_idle()
@@ -796,10 +825,38 @@ class PageCollision(QWidget):
             self._hist_loss.pop(0)
 
     def _update_plot_lines(self) -> None:
+        if len(self._hist_t_prev) > 0:
+            ttp = np.asarray(self._hist_t_prev, dtype=float)
+            self._line_ke_tot_prev.set_data(ttp, np.asarray(self._hist_ke_prev, dtype=float))
+            self._line_ke_loss_prev.set_data(ttp, np.asarray(self._hist_loss_prev, dtype=float))
+            cap = self._energy_prev_caption or ""
+            self._line_ke_tot_prev.set_label(f"上次动能 ({cap})")
+            self._line_ke_loss_prev.set_label(f"上次损失 ({cap})")
+        else:
+            self._line_ke_tot_prev.set_data([], [])
+            self._line_ke_loss_prev.set_data([], [])
+            self._line_ke_tot_prev.set_label("上次 总动能")
+            self._line_ke_loss_prev.set_label("上次 损失")
+
         if not self._hist_t:
             self._line_ke_tot.set_data([], [])
             self._line_ke_loss.set_data([], [])
             self._ax_energy.set_xlim(0.0, _TIME_WINDOW)
+            if len(self._hist_t_prev) > 0:
+                ttp = np.asarray(self._hist_t_prev, dtype=float)
+                t_end = float(ttp[-1])
+                if t_end < _TIME_WINDOW:
+                    self._ax_energy.set_xlim(0.0, _TIME_WINDOW)
+                else:
+                    self._ax_energy.set_xlim(max(0.0, t_end - _TIME_WINDOW), t_end + 1e-6)
+                kpv = np.asarray(self._hist_ke_prev, dtype=float)
+                lpv = np.asarray(self._hist_loss_prev, dtype=float)
+                both = np.concatenate([kpv, lpv])
+                lo = float(np.min(both))
+                hi = float(np.max(both))
+                span = max(hi - lo, 0.01)
+                self._ax_energy.set_ylim(lo - 0.1 * span, hi + 0.12 * span)
+            self._ax_energy.legend(loc="upper right", fontsize=8, framealpha=0.92)
             return
 
         tt = np.asarray(self._hist_t, dtype=float)
@@ -815,11 +872,16 @@ class PageCollision(QWidget):
 
         ke_arr = np.asarray(self._hist_ke, dtype=float)
         loss_arr = np.asarray(self._hist_loss, dtype=float)
-        both = np.concatenate([ke_arr, loss_arr])
+        parts = [ke_arr, loss_arr]
+        if len(self._hist_t_prev) > 0:
+            parts.append(np.asarray(self._hist_ke_prev, dtype=float))
+            parts.append(np.asarray(self._hist_loss_prev, dtype=float))
+        both = np.concatenate(parts)
         lo = float(np.min(both))
         hi = float(np.max(both))
         span = max(hi - lo, 0.01)
         self._ax_energy.set_ylim(lo - 0.1 * span, hi + 0.12 * span)
+        self._ax_energy.legend(loc="upper right", fontsize=8, framealpha=0.92)
 
     def _sync_graphics(self) -> None:
         if self._state is None:

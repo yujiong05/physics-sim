@@ -115,7 +115,7 @@ class ObjectCreatePanel(QWidget):
         l.addRow("名称:", self.ball_name)
         l.addRow("质量 (kg):", self.ball_mass)
         l.addRow("半径 (px):", self.ball_radius)
-        l.addRow("弹性:", self.ball_restitution)
+        l.addRow("弹性 e (0~1):", self.ball_restitution)
         l.addRow("初速 X (px/s):", self.ball_vx)
         l.addRow("初速 Y (px/s):", self.ball_vy)
         return w
@@ -135,7 +135,7 @@ class ObjectCreatePanel(QWidget):
         l.addRow("质量 (kg):", self.block_mass)
         l.addRow("宽度 (px):", self.block_width)
         l.addRow("高度 (px):", self.block_height)
-        l.addRow("弹性:", self.block_restitution)
+        l.addRow("弹性 e (0~1):", self.block_restitution)
         l.addRow("初速 X (px/s):", self.block_vx)
         l.addRow("初速 Y (px/s):", self.block_vy)
         return w
@@ -150,8 +150,8 @@ class ObjectCreatePanel(QWidget):
         self.spring_len = QDoubleSpinBox(); self.spring_len.setRange(1, 1000); self.spring_len.setValue(100.0)
         self.spring_angle = QDoubleSpinBox(); self.spring_angle.setRange(0, 360); self.spring_angle.setValue(0.0)
         l.addRow("名称:", self.spring_name)
-        l.addRow("刚度 (k):", self.spring_k)
-        l.addRow("阻尼 (d):", self.spring_d)
+        l.addRow("刚度 k (引擎单位):", self.spring_k)
+        l.addRow("阻尼 d (引擎单位):", self.spring_d)
         l.addRow("静止长度 (px):", self.spring_len)
         l.addRow("当前角度 (°):", self.spring_angle)
         return w
@@ -170,8 +170,8 @@ class ObjectCreatePanel(QWidget):
         l.addRow("宽度 (px):", self.static_width)
         l.addRow("高度 (px):", self.static_height)
         l.addRow("角度 (°):", self.static_angle)
-        l.addRow("弹性系数:", self.static_restitution)
-        l.addRow("摩擦系数:", self.static_friction)
+        l.addRow("弹性 e (0~1):", self.static_restitution)
+        l.addRow("摩擦 μ (0~1):", self.static_friction)
         return w
 
     def create_groove_form(self):
@@ -197,8 +197,8 @@ class ObjectCreatePanel(QWidget):
         l.addRow("质量 (kg):", self.groove_mass)
         l.addRow("初速 X (px/s):", self.groove_vx)
         l.addRow("初速 Y (px/s):", self.groove_vy)
-        l.addRow("弹性系数:", self.groove_restitution)
-        l.addRow("摩擦系数:", self.groove_friction)
+        l.addRow("弹性 e (0~1):", self.groove_restitution)
+        l.addRow("摩擦 μ (0~1):", self.groove_friction)
         
         # 联动控制
         def toggle_fixed():
@@ -227,7 +227,7 @@ class ObjectCreatePanel(QWidget):
         l.addRow("角度 (°):", self.rod_angle)
         l.addRow("厚度 (px):", self.rod_thickness)
         l.addRow("质量 (kg):", self.rod_mass)
-        l.addRow("摩擦系数:", self.rod_friction)
+        l.addRow("摩擦 μ (0~1):", self.rod_friction)
         return w
 
     def create_rope_form(self):
@@ -244,7 +244,7 @@ class ObjectCreatePanel(QWidget):
         l.addRow("名称:", self.rope_name)
         l.addRow("长度 (px):", self.rope_len)
         l.addRow("角度 (°):", self.rope_angle)
-        l.addRow("阻尼 (d):", self.rope_damping)
+        l.addRow("阻尼 d (引擎单位):", self.rope_damping)
         l.addRow("线宽 (px):", self.rope_thickness)
         l.addRow("颜色:", self.rope_color)
         return w

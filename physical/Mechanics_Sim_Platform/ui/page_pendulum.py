@@ -98,6 +98,14 @@ class PagePendulum(QWidget):
         self._ax_energy = None
         self._phase_frame_i = 0
 
+        self._pendulum_run_tag = ""
+        self._trail_prev: List[Tuple[float, float]] = []
+        self._phase_prev: List[Tuple[float, float]] = []
+        self._trail_prev_caption = ""
+
+        self._line_trail_prev = None
+        self._line_phase_prev = None
+
         configure_matplotlib_chinese_font()
         self._chat_ai = TeachingChatHelper(self, "pendulum")
         self._build_ui()
@@ -348,7 +356,7 @@ class PagePendulum(QWidget):
         self._spin_scale.setRange(0.1, 5.0)
         self._spin_scale.setDecimals(2)
         self._spin_scale.setSingleStep(0.1)
-        self._spin_scale.setValue(1.0)
+        self._spin_scale.setValue(5.0)
         self._spin_scale.setSuffix(" ×")
 
         self._spin_c_damp = QDoubleSpinBox()
@@ -357,6 +365,7 @@ class PagePendulum(QWidget):
         self._spin_c_damp.setSingleStep(0.01)
         self._spin_c_damp.setValue(0.05)
         self._spin_c_damp.setSuffix(" s⁻¹")
+        self._spin_c_damp.setToolTip("关节粘性阻尼：角运动方程中叠加与角速度成正比的耗散项，c 的单位为 1/s")
 
         self._spin_tmax = QDoubleSpinBox()
         self._spin_tmax.setRange(5.0, 120.0)
@@ -388,14 +397,14 @@ class PagePendulum(QWidget):
         self._spin_c_damp.valueChanged.connect(self._mark_dirty)
         self._spin_tmax.valueChanged.connect(self._mark_dirty)
 
-        form.addRow("摆长 L₁：", self._slider_label_row(self._slider_L1, self._lbl_L1))
-        form.addRow("摆长 L₂：", self._slider_label_row(self._slider_L2, self._lbl_L2))
-        form.addRow("质量 m₁：", self._slider_label_row(self._slider_m1, self._lbl_m1))
-        form.addRow("质量 m₂：", self._slider_label_row(self._slider_m2, self._lbl_m2))
-        form.addRow("初始 θ₁：", self._angle_row(self._slider_th1, self._spin_th1))
-        form.addRow("初始 θ₂：", self._angle_row(self._slider_th2, self._spin_th2))
+        form.addRow("摆长 L₁ (m)：", self._slider_label_row(self._slider_L1, self._lbl_L1))
+        form.addRow("摆长 L₂ (m)：", self._slider_label_row(self._slider_L2, self._lbl_L2))
+        form.addRow("质量 m₁ (kg)：", self._slider_label_row(self._slider_m1, self._lbl_m1))
+        form.addRow("质量 m₂ (kg)：", self._slider_label_row(self._slider_m2, self._lbl_m2))
+        form.addRow("初始 θ₁ (°)：", self._angle_row(self._slider_th1, self._spin_th1))
+        form.addRow("初始 θ₂ (°)：", self._angle_row(self._slider_th2, self._spin_th2))
         form.addRow("播放倍速：", self._spin_scale)
-        form.addRow("阻尼系数 c：", self._spin_c_damp)
+        form.addRow("阻尼系数 c (1/s)：", self._spin_c_damp)
         form.addRow("仿真时长上限：", self._spin_tmax)
 
         btn_row = QHBoxLayout()
@@ -416,7 +425,8 @@ class PagePendulum(QWidget):
 
         hint = QLabel(
             "提示：<i>c=0</i> 时总能量曲线近似水平；<i>c&gt;0</i> 时机械能逐渐减小。"
-            "橙色线为 m₂ 拖尾；每帧引擎内 RK4 微步推进。"
+            "橙色线为 m₂ 拖尾；再次「开始仿真」或「重置」后保留<b>上次</b>拖尾与相轨（灰色虚线）作对照。"
+            "每帧 RK4 微步推进。"
         )
         hint.setWordWrap(True)
         hint.setStyleSheet("color:#64748b;font-size:12pt;line-height:155%;")
@@ -467,8 +477,14 @@ class PagePendulum(QWidget):
         )
         self._ax_anim.plot([0.0], [0.0], marker="s", color="#64748b", markersize=5, zorder=4)
         (self._line_trail,) = self._ax_anim.plot([], [], color="#f97316", linewidth=1.4, alpha=0.88, zorder=2)
+        (self._line_trail_prev,) = self._ax_anim.plot(
+            [], [], color="#64748b", linewidth=1.2, linestyle="--", alpha=0.65, zorder=1
+        )
 
         (self._line_phase,) = self._ax_phase.plot([], [], color="#2563eb", linewidth=0.9, alpha=0.75)
+        (self._line_phase_prev,) = self._ax_phase.plot(
+            [], [], color="#94a3b8", linewidth=0.75, linestyle="--", alpha=0.55
+        )
 
         (self._line_ke,) = self._ax_energy.plot([], [], color="#16a34a", linewidth=1.3, label="动能", alpha=0.9)
         (self._line_pe,) = self._ax_energy.plot([], [], color="#ca8a04", linewidth=1.3, label="势能", alpha=0.9)
@@ -582,6 +598,12 @@ class PagePendulum(QWidget):
         self._energy_pe.clear()
         self._energy_et.clear()
 
+    def _pendulum_run_label(self) -> str:
+        c = float(self._spin_c_damp.value())
+        t1 = float(self._spin_th1.value())
+        t2 = float(self._spin_th2.value())
+        return f"c={c:.4g}, θ₁={t1:.1f}°, θ₂={t2:.1f}°"
+
     def _append_energy_point(self, t: float, ke: float, pe: float, et: float) -> None:
         self._energy_t.append(t)
         self._energy_ke.append(ke)
@@ -594,6 +616,11 @@ class PagePendulum(QWidget):
             del self._energy_et[0]
 
     def _init_simulation(self) -> None:
+        if len(self._trail) >= 2:
+            self._trail_prev = list(self._trail)
+            self._phase_prev = list(self._phase_pts)
+            self._trail_prev_caption = self._pendulum_run_tag
+
         m1, m2, L1, L2 = self._physics_params()
         th1 = np.deg2rad(self._spin_th1.value())
         th2 = np.deg2rad(self._spin_th2.value())
@@ -619,12 +646,26 @@ class PagePendulum(QWidget):
         self._ax_energy.set_xlim(0.0, max(5.0, float(self._spin_tmax.value()) * 0.05))
         self._ax_energy.set_ylim(-1.0, 1.0)
 
+        if len(self._trail_prev) >= 2:
+            px, py = zip(*self._trail_prev)
+            self._line_trail_prev.set_data(px, py)
+        else:
+            self._line_trail_prev.set_data([], [])
+
+        if len(self._phase_prev) >= 2:
+            a, b = zip(*self._phase_prev)
+            self._line_phase_prev.set_data(a, b)
+        else:
+            self._line_phase_prev.set_data([], [])
+
         info0 = state_mechanics(self._y, m1, m2, L1, L2, G_DEFAULT)
         self._append_energy_point(0.0, info0["ke"], info0["pe"], info0["e_total"])
         self._draw_state(info0)
 
         emax = max(abs(info0["ke"]), abs(info0["pe"]), abs(info0["e_total"]), 0.5)
         self._ax_energy.set_ylim(-0.05 * emax, 1.15 * emax)
+
+        self._pendulum_run_tag = self._pendulum_run_label()
 
         self._canvas.draw_idle()
         self._dirty = False

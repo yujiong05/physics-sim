@@ -108,6 +108,22 @@ class PageProjectile(QWidget):
         self._pack_ideal: Optional[Dict[str, Any]] = None
         self._pack_drag: Optional[Dict[str, Any]] = None
 
+        self._hist_run_k: Optional[float] = None
+        self._prev_hist_x: list[float] = []
+        self._prev_hist_y: list[float] = []
+        self._prev_hist_t: list[float] = []
+        self._prev_hist_vx: list[float] = []
+        self._prev_hist_vy: list[float] = []
+        self._prev_hist_ke: list[float] = []
+        self._prev_hist_pe: list[float] = []
+        self._prev_hist_e: list[float] = []
+        self._prev_run_k: Optional[float] = None
+
+        self._line_drag_prev = None
+        self._line_v_drag_prev = None
+        self._line_y_macro_drag_prev = None
+        self._line_e_tot_prev = None
+
         configure_matplotlib_chinese_font()
         self._chat_ai = TeachingChatHelper(self, "projectile")
         self._build_ui()
@@ -339,7 +355,8 @@ class PageProjectile(QWidget):
             "d<i>v<sub>x</sub></i>/d<i>t</i> = 0,  d<i>v<sub>y</sub></i>/d<i>t</i> = −<i>g</i><br/>"
             "<b>有阻力（与速率平方成正比，方向与速度相反）</b>：<br/>"
             "d<i>v<sub>x</sub></i>/d<i>t</i> = −(<i>k</i>/<i>m</i>)|<i><b>v</b></i>|<i>v<sub>x</sub></i>,  "
-            "d<i>v<sub>y</sub></i>/d<i>t</i> = −<i>g</i> − (<i>k</i>/<i>m</i>)|<i><b>v</b></i>|<i>v<sub>y</sub></i><br/>"
+            "d<i>v<sub>y</sub></i>/d<i>t</i> = −<i>g</i> − (<i>k</i>/<i>m</i>)|<i><b>v</b></i>|<i>v<sub>y</sub></i>；"
+            "其中 <i>k</i> 为阻力常数，SI 单位为 <b>kg/m</b>（与 |<i><b>F</b></i><sub>阻</sub>|∝<i>k</i>|<i><b>v</b></i>|² 一致）<br/>"
             "<b>仿真实验室</b>：理想轨迹仍由 SciPy 一次性积分给出作对照；"
             "<b>有阻力</b>轨迹与能量曲线由固定 "
             f"{TIMER_MS} ms UI 节拍 × 回放倍速 作为宏观步长，在引擎内对同一方程做经典 RK4 微步递推得到。"
@@ -354,7 +371,7 @@ class PageProjectile(QWidget):
 
         self._slider_v0 = QSlider(Qt.Horizontal)
         self._slider_v0.setRange(10, 100)
-        self._slider_v0.setValue(40)
+        self._slider_v0.setValue(10)
         self._spin_v0 = QSpinBox()
         self._spin_v0.setRange(10, 100)
         self._spin_v0.setSuffix(" m/s")
@@ -377,12 +394,14 @@ class PageProjectile(QWidget):
         self._spin_k.setDecimals(3)
         self._spin_k.setSingleStep(0.005)
         self._spin_k.setValue(0.05)
+        self._spin_k.setSuffix(" kg/m")
+        self._spin_k.setToolTip("阻力常数 k：SI 单位为 kg/m，满足 |F阻|∝k|v|²")
 
         self._spin_m = QDoubleSpinBox()
         self._spin_m.setRange(0.1, 10.0)
         self._spin_m.setDecimals(2)
         self._spin_m.setSingleStep(0.1)
-        self._spin_m.setValue(1.0)
+        self._spin_m.setValue(3.0)
         self._spin_m.setSuffix(" kg")
 
         # 直接键盘输入（回车或失去焦点时写入合法范围并同步滑块）
@@ -401,7 +420,7 @@ class PageProjectile(QWidget):
         self._edit_k = QLineEdit()
         self._edit_k.setObjectName("ParamEdit")
         self._edit_k.setPlaceholderText("输入")
-        self._edit_k.setToolTip("直接输入阻力系数 k，范围 0–0.5")
+        self._edit_k.setToolTip("阻力系数 k（SI：kg/m），|F阻|∝k|v|²；范围 0–0.5")
         self._edit_k.editingFinished.connect(self._apply_k_from_edit)
 
         self._edit_m = QLineEdit()
@@ -441,16 +460,17 @@ class PageProjectile(QWidget):
 
         form.addRow("初速度 v₀：", w_v0)
         form.addRow("发射角 θ：", w_deg)
-        form.addRow("阻力系数 k：", w_k)
+        form.addRow("阻力系数 k（SI）：", w_k)
         form.addRow("质量 m：", w_m)
 
         self._spin_playback = QDoubleSpinBox()
         self._spin_playback.setRange(0.1, 5.0)
         self._spin_playback.setDecimals(2)
         self._spin_playback.setSingleStep(0.1)
-        self._spin_playback.setValue(1.0)
+        self._spin_playback.setValue(4.0)
+        self._spin_playback.setSuffix(" ×")
         self._spin_playback.setToolTip(
-            f"回放倍速：每 {TIMER_MS} ms 推进的仿真时间为 ("
+            f"回放倍速（无量纲）：每 {TIMER_MS} ms 推进的仿真时间为 ("
             f"{TIMER_MS}/1000)× 倍速（秒）。1.0 时约 1 s 仿真 / 1 s 墙钟。"
         )
         form.addRow("回放倍速：", self._spin_playback)
@@ -522,15 +542,24 @@ class PageProjectile(QWidget):
 
         (self._line_ideal,) = self._ax.plot([], [], linestyle="--", linewidth=2.0, color="#94a3b8", label="无阻力")
         (self._line_drag,) = self._ax.plot([], [], linestyle="-", linewidth=2.2, color="#2563eb", label="有阻力")
+        (self._line_drag_prev,) = self._ax.plot(
+            [], [], linestyle="--", linewidth=1.7, color="#64748b", alpha=0.72, label="上次有阻力"
+        )
         self._scatter_pt = self._ax.scatter([], [], s=85, color="#f97316", edgecolors="#ffffff", linewidths=1.2, zorder=5)
         self._ax.legend(loc="upper right", framealpha=0.9, fontsize=9)
 
         (self._line_v_ideal,) = self._ax_v.plot([], [], linestyle="--", linewidth=1.6, color="#94a3b8", label="无阻力 |v|")
         (self._line_v_drag,) = self._ax_v.plot([], [], linestyle="-", linewidth=1.8, color="#2563eb", label="有阻力 |v|")
+        (self._line_v_drag_prev,) = self._ax_v.plot(
+            [], [], linestyle="--", linewidth=1.5, color="#64748b", alpha=0.65, label="上次 |v|"
+        )
         self._ax_v.legend(loc="upper right", fontsize=8, framealpha=0.92)
 
         (self._line_y_macro_ideal,) = self._ax_y.plot([], [], linestyle="--", linewidth=1.6, color="#94a3b8", label="无阻力 y")
         (self._line_y_macro_drag,) = self._ax_y.plot([], [], linestyle="-", linewidth=1.8, color="#2563eb", label="有阻力 y")
+        (self._line_y_macro_drag_prev,) = self._ax_y.plot(
+            [], [], linestyle="--", linewidth=1.5, color="#64748b", alpha=0.65, label="上次 y"
+        )
         self._ax_y.legend(loc="upper right", fontsize=8, framealpha=0.92)
 
         self._vline_speed = self._ax_v.axvline(0.0, color="#64748b", linestyle=":", linewidth=1.2, alpha=0.9)
@@ -541,6 +570,9 @@ class PageProjectile(QWidget):
         (self._line_e_ke,) = self._ax_e.plot([], [], linestyle="-", linewidth=1.6, color="#16a34a", label="动能")
         (self._line_e_pe,) = self._ax_e.plot([], [], linestyle="-", linewidth=1.6, color="#ca8a04", label="势能")
         (self._line_e_tot,) = self._ax_e.plot([], [], linestyle="-", linewidth=2.0, color="#7c3aed", label="总机械能")
+        (self._line_e_tot_prev,) = self._ax_e.plot(
+            [], [], linestyle="--", linewidth=1.5, color="#64748b", alpha=0.65, label="上次 E总"
+        )
         self._ax_e.legend(loc="upper right", fontsize=8, framealpha=0.92)
 
         self._canvas = FigureCanvas(self._fig)
@@ -705,11 +737,82 @@ class PageProjectile(QWidget):
             t_simple = 2.0 * vy0 / g
         return float(max(80.0, t_simple * 6.0))
 
+    def _snapshot_previous_drag_run(self) -> None:
+        """再次开始前保留上一次有阻力仿真数据，便于与新的 k 等参数对照。"""
+        if not self._hist_t:
+            return
+        self._prev_hist_x = list(self._hist_x)
+        self._prev_hist_y = list(self._hist_y)
+        self._prev_hist_t = list(self._hist_t)
+        self._prev_hist_vx = list(self._hist_vx)
+        self._prev_hist_vy = list(self._hist_vy)
+        self._prev_hist_ke = list(self._hist_ke)
+        self._prev_hist_pe = list(self._hist_pe)
+        self._prev_hist_e = list(self._hist_e)
+        self._prev_run_k = self._hist_run_k if self._hist_run_k is not None else float(self._spin_k.value())
+
+    def _apply_previous_drag_lines(self) -> None:
+        """绘制灰色虚线：上次有阻力轨迹及宏观、能量对照。"""
+        if not self._prev_hist_t:
+            self._line_drag_prev.set_data([], [])
+            self._line_v_drag_prev.set_data([], [])
+            self._line_y_macro_drag_prev.set_data([], [])
+            self._line_e_tot_prev.set_data([], [])
+            return
+        t = np.asarray(self._prev_hist_t, dtype=float)
+        x = np.asarray(self._prev_hist_x, dtype=float)
+        y = np.asarray(self._prev_hist_y, dtype=float)
+        vx = np.asarray(self._prev_hist_vx, dtype=float)
+        vy = np.asarray(self._prev_hist_vy, dtype=float)
+        vmag = np.hypot(vx, vy)
+        pk = float(self._prev_run_k) if self._prev_run_k is not None else 0.0
+        self._line_drag_prev.set_data(x, y)
+        self._line_drag_prev.set_label(f"上次有阻力 (k={pk:.3f})")
+        self._line_v_drag_prev.set_data(t, vmag)
+        self._line_v_drag_prev.set_label(f"上次 |v| (k={pk:.3f})")
+        self._line_y_macro_drag_prev.set_data(t, y)
+        self._line_y_macro_drag_prev.set_label(f"上次 y (k={pk:.3f})")
+        self._line_e_tot_prev.set_data(t, np.asarray(self._prev_hist_e, dtype=float))
+        self._line_e_tot_prev.set_label(f"上次 E总 (k={pk:.3f})")
+        self._ax.legend(loc="upper right", framealpha=0.9, fontsize=9)
+        self._ax_v.legend(loc="upper right", fontsize=8, framealpha=0.92)
+        self._ax_y.legend(loc="upper right", fontsize=8, framealpha=0.92)
+        self._ax_e.legend(loc="upper right", fontsize=8, framealpha=0.92)
+
+    def _clear_previous_drag_overlay(self) -> None:
+        self._prev_hist_x.clear()
+        self._prev_hist_y.clear()
+        self._prev_hist_t.clear()
+        self._prev_hist_vx.clear()
+        self._prev_hist_vy.clear()
+        self._prev_hist_ke.clear()
+        self._prev_hist_pe.clear()
+        self._prev_hist_e.clear()
+        self._prev_run_k = None
+        if self._line_drag_prev is not None:
+            self._line_drag_prev.set_data([], [])
+            self._line_drag_prev.set_label("上次有阻力")
+        if self._line_v_drag_prev is not None:
+            self._line_v_drag_prev.set_data([], [])
+            self._line_v_drag_prev.set_label("上次 |v|")
+        if self._line_y_macro_drag_prev is not None:
+            self._line_y_macro_drag_prev.set_data([], [])
+            self._line_y_macro_drag_prev.set_label("上次 y")
+        if self._line_e_tot_prev is not None:
+            self._line_e_tot_prev.set_data([], [])
+            self._line_e_tot_prev.set_label("上次 E总")
+        self._ax.legend(loc="upper right", framealpha=0.9, fontsize=9)
+        self._ax_v.legend(loc="upper right", fontsize=8, framealpha=0.92)
+        self._ax_y.legend(loc="upper right", fontsize=8, framealpha=0.92)
+        self._ax_e.legend(loc="upper right", fontsize=8, framealpha=0.92)
+
     def _on_start_simulation(self) -> None:
         self._timer.stop()
         self._paused = False
         self._btn_pause.setEnabled(True)
         self._btn_pause.setText("暂停")
+
+        self._snapshot_previous_drag_run()
 
         v0 = float(self._spin_v0.value())
         angle = float(self._spin_deg.value())
@@ -775,9 +878,12 @@ class PageProjectile(QWidget):
         self._line_e_pe.set_data([], [])
         self._line_e_tot.set_data([], [])
 
+        self._hist_run_k = float(self._spin_k.value())
+
         self._vline_speed.set_visible(True)
         self._vline_height.set_visible(True)
 
+        self._apply_previous_drag_lines()
         self._sync_live_plot_lines()
         self._canvas.draw_idle()
         self._timer.start()
@@ -802,6 +908,8 @@ class PageProjectile(QWidget):
         self._y_drag_state = None
         self._t_drag_sim = 0.0
         self._drag_finished = False
+        self._hist_run_k = None
+        self._clear_previous_drag_overlay()
         self._hist_t.clear()
         self._hist_x.clear()
         self._hist_y.clear()
@@ -888,6 +996,10 @@ class PageProjectile(QWidget):
             vmax_candidates.append(float(np.max(np.asarray(vi, dtype=float))))
         if vmag.size:
             vmax_candidates.append(float(np.max(vmag)))
+        if self._prev_hist_t:
+            vprev = np.hypot(np.asarray(self._prev_hist_vx, dtype=float), np.asarray(self._prev_hist_vy, dtype=float))
+            if vprev.size:
+                vmax_candidates.append(float(np.max(vprev)))
         vmax = max(vmax_candidates) if vmax_candidates else 1.0
         pad_v = max(vmax * 0.08, 0.25)
         self._ax_v.set_xlim(0.0, t_hi)
@@ -901,6 +1013,10 @@ class PageProjectile(QWidget):
             yi_a = np.asarray(yi_ideal, dtype=float)
             ymax = max(ymax, float(np.max(yi_a)))
             ymin = min(ymin, float(np.min(yi_a)))
+        if self._prev_hist_y:
+            py = np.asarray(self._prev_hist_y, dtype=float)
+            ymax = max(ymax, float(np.max(py)))
+            ymin = min(ymin, float(np.min(py)))
         yspan = max(ymax - ymin, 1e-6)
         pad_y = max(yspan * 0.12, 0.05)
         self._ax_y.set_xlim(0.0, t_hi)
@@ -909,7 +1025,10 @@ class PageProjectile(QWidget):
         ke = np.asarray(self._hist_ke, dtype=float)
         pe = np.asarray(self._hist_pe, dtype=float)
         et = np.asarray(self._hist_e, dtype=float)
-        stacked = np.concatenate([ke, pe, et])
+        stacked = [ke, pe, et]
+        if self._prev_hist_e:
+            stacked.append(np.asarray(self._prev_hist_e, dtype=float))
+        stacked = np.concatenate(stacked)
         lo = float(np.min(stacked))
         hi = float(np.max(stacked))
         span = max(hi - lo, 0.05)
