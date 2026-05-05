@@ -26,6 +26,7 @@ from PyQt5.QtWidgets import (
     QMainWindow,
     QPushButton,
     QShortcut,
+    QSplitter,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -212,7 +213,7 @@ class MainWindow(QMainWindow):
                 print("Failed to inject back button to lab view:", e)
 
     def _create_back_btn(self) -> QPushButton:
-        btn = QPushButton("🏠 返回主菜单")
+        btn = QPushButton("返回主菜单")
         btn.setObjectName("backToMenuBtn")
         btn.setFixedWidth(140)
         btn.setCursor(Qt.PointingHandCursor)

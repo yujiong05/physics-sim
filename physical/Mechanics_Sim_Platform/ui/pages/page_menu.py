@@ -127,7 +127,7 @@ class PageMenu(QWidget):
         main_layout.addStretch(1)
 
         # 页脚
-        footer = QLabel("© 2026 力学仿真教学团队")
+        footer = QLabel("")
         footer.setAlignment(Qt.AlignCenter)
         footer.setStyleSheet("font-size: 9pt; color: #94a3b8;")
         main_layout.addWidget(footer)

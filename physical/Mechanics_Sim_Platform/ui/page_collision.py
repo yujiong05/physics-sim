@@ -52,7 +52,7 @@ from ui.mpl_setup import configure_matplotlib_chinese_font
 from ui.teaching_chat_helper import TeachingChatHelper
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_TEXTBOOK_PATH = _PROJECT_ROOT / "assets" / "collision_textbook.png"
+_TEXTBOOK_PATH = _PROJECT_ROOT / "assets" / "long_images" / "碰撞模型.png"
 
 BOX_W = 1.0
 BOX_H = 0.65
@@ -222,11 +222,10 @@ class PageCollision(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setAlignment(Qt.AlignTop)
 
         pic = QLabel()
-        pic.setAlignment(Qt.AlignCenter)
-        pic.setMinimumHeight(260)
-        pic.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        pic.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
         if _TEXTBOOK_PATH.is_file():
             pix = QPixmap(str(_TEXTBOOK_PATH))

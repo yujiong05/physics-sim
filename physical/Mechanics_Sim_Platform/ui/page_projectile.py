@@ -49,7 +49,7 @@ from ui.teaching_chat_helper import TeachingChatHelper
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 TIMER_MS = 16
-_TEXTBOOK_PATH = _PROJECT_ROOT / "assets" / "projectile_textbook.png"
+_TEXTBOOK_PATH = _PROJECT_ROOT / "assets" / "long_images" / "带有阻力的抛体运动.png"
 
 
 def _card_shadow(widget: QWidget, blur: int = 22, dy: int = 3) -> None:
@@ -242,13 +242,10 @@ class PageProjectile(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setAlignment(Qt.AlignTop)
 
         pic_holder = QLabel()
-        pic_holder.setAlignment(Qt.AlignCenter)
-        pic_holder.setMinimumHeight(280)
-        pic_holder.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        pic_holder.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
         if _TEXTBOOK_PATH.is_file():
             pix = QPixmap(str(_TEXTBOOK_PATH))
