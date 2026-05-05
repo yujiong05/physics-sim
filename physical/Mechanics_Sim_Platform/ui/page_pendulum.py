@@ -33,6 +33,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from ui.markdown_viewer import MarkdownFormulaViewer
 from engine.pendulum_calc import G_DEFAULT, state_cartesian, state_mechanics, step_double_pendulum_rk4
 from ui.mpl_setup import configure_matplotlib_chinese_font
 from ui.teaching_chat_helper import TeachingChatHelper
@@ -92,6 +93,16 @@ class PagePendulum(QWidget):
         self._chat_ai = TeachingChatHelper(self, "pendulum")
         self._build_ui()
         self._stack.currentChanged.connect(self._on_stack_changed)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self._refresh_chat_webview)
+        QTimer.singleShot(100, self._refresh_chat_webview)
+        QTimer.singleShot(300, self._refresh_chat_webview)
+
+    def _refresh_chat_webview(self):
+        if hasattr(self, "_chat_log") and hasattr(self._chat_log, "force_refresh"):
+            self._chat_log.force_refresh()
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
@@ -224,11 +235,9 @@ class PagePendulum(QWidget):
         title_r = QLabel("AI 智能助教")
         title_r.setStyleSheet("font-weight:600;font-size:12pt;color:#0f172a;")
 
-        self._chat_log = QTextBrowser()
-        self._chat_log.setObjectName("ChatLog")
-        self._chat_log.setHtml(
-            "<p style='color:#64748b;'>可提问双摆方程、混沌初值敏感性或能量与阻尼。"
-            "请先在主窗口「设置 → DeepSeek API 密钥」保存密钥；回复由 DeepSeek 生成。</p>"
+        self._chat_log = MarkdownFormulaViewer()
+        self._chat_log.set_markdown(
+            "可提问双摆方程、混沌初值敏感性或能量与阻尼。请先在主窗口「设置 → DeepSeek API 密钥」保存密钥。"
         )
 
         row = QHBoxLayout()
@@ -255,7 +264,8 @@ class PagePendulum(QWidget):
         rl.addWidget(btn_lab)
 
         layout.addWidget(self._wrap_card(left_inner), stretch=6)
-        layout.addWidget(self._wrap_card(right_inner), stretch=4)
+        # 第三优先级：去除外层复杂包装，裸布局测试是否实时刷新
+        layout.addWidget(right_inner, stretch=4)
         return page
 
     def _build_lab_view(self) -> QWidget:

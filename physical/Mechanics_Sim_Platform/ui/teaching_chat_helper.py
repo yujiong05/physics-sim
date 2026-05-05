@@ -3,36 +3,37 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional, Union
 
 from PyQt5.QtWidgets import QLineEdit, QMessageBox, QTextBrowser, QWidget
 
 from ai.chat_worker import DeepSeekChatWorker
 from ai.teaching_system_prompt import lab_system_prompt
 from settings.app_settings import get_deepseek_api_key
-from ui.chat_bubbles import assistant_bubble_html, error_hint_html, user_bubble_html
+from ui.markdown_viewer import MarkdownFormulaViewer
 
 
 class TeachingChatHelper:
-    """挂接到 QTextBrowser + QLineEdit + 发送按钮。"""
+    """挂接到 MarkdownFormulaViewer + QLineEdit + 发送按钮。"""
 
     def __init__(self, parent: QWidget, lab_key: str) -> None:
         self._parent = parent
         self._lab_key = lab_key
-        self._log: Optional[QTextBrowser] = None
+        self._viewer: Optional[Union[QTextBrowser, MarkdownFormulaViewer]] = None
         self._inp: Optional[QLineEdit] = None
         self._btn: Optional[QWidget] = None
         self._placeholder_original = ""
         self._worker: Optional[DeepSeekChatWorker] = None
+        self._history: List[str] = []
 
-    def attach(self, log: QTextBrowser, inp: QLineEdit, send_btn: QWidget) -> None:
-        self._log = log
+    def attach(self, viewer: Union[QTextBrowser, MarkdownFormulaViewer], inp: QLineEdit, send_btn: QWidget) -> None:
+        self._viewer = viewer
         self._inp = inp
         self._btn = send_btn
         self._placeholder_original = inp.placeholderText()
 
     def on_send(self) -> None:
-        if self._log is None or self._inp is None or self._btn is None:
+        if self._viewer is None or self._inp is None or self._btn is None:
             return
         text = self._inp.text().strip()
         if not text:
@@ -49,7 +50,13 @@ class TeachingChatHelper:
             )
             return
 
-        self._log.append(user_bubble_html(text))
+        # 追加用户消息
+        if isinstance(self._viewer, MarkdownFormulaViewer):
+            self._viewer.append_markdown(text, role="user")
+        else:
+            self._history.append(f"### 👤 我\n{text}\n")
+            self._refresh_viewer()
+            
         self._inp.clear()
 
         self._btn.setEnabled(False)
@@ -69,13 +76,30 @@ class TeachingChatHelper:
         worker.finished.connect(self._on_thread_finished)
         worker.start()
 
+    def _refresh_viewer(self, scroll: bool = False) -> None:
+        """此方法主要用于初始化或兼容旧模式。"""
+        if self._viewer is None:
+            return
+        full_md = "\n---\n".join(self._history)
+        if isinstance(self._viewer, MarkdownFormulaViewer):
+            self._viewer.set_markdown(full_md)
+        else:
+            self._viewer.setText(full_md)
+
     def _on_success(self, reply: str) -> None:
-        if self._log is not None:
-            self._log.append(assistant_bubble_html(reply))
+        if isinstance(self._viewer, MarkdownFormulaViewer):
+            self._viewer.append_markdown(reply, role="assistant")
+        else:
+            self._history.append(f"### 🤖 AI 助教\n{reply}\n")
+            self._refresh_viewer(scroll=True)
 
     def _on_error(self, message: str) -> None:
-        if self._log is not None:
-            self._log.append(error_hint_html(message))
+        error_msg = f"请求失败：{message}"
+        if isinstance(self._viewer, MarkdownFormulaViewer):
+            self._viewer.append_markdown(error_msg, role="system")
+        else:
+            self._history.append(f"> ❌ {error_msg}\n")
+            self._refresh_viewer(scroll=True)
 
     def _on_thread_finished(self) -> None:
         if self._btn is not None:

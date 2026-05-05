@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QGraphicsView, QToolBar, QAction, 
-                             QActionGroup, QFileDialog, QMessageBox, QLabel, QDialog)
+                             QActionGroup, QFileDialog, QMessageBox, QLabel, QDialog,
+                             QGroupBox, QTextBrowser, QLineEdit)
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QIcon
 import pyqtgraph as pg
@@ -18,6 +19,8 @@ from gui.force_dialog import ForceDialog
 
 from storage.project_io import save_project, load_project
 from templates.experiment_templates import ALL_TEMPLATES
+
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -373,10 +376,10 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(mid_layout, stretch=2)
         
         # 右侧面板
-        right_layout = QVBoxLayout()
+        self.right_layout = QVBoxLayout()
         self.property_panel = PropertyPanel()
         self.property_panel.property_changed.connect(self.on_property_changed)
-        right_layout.addWidget(self.property_panel)
+        self.right_layout.addWidget(self.property_panel)
         
         self.scene.object_selected.connect(self.on_object_selected)
         self.scene.object_changed.connect(self.on_object_changed)
@@ -385,9 +388,9 @@ class MainWindow(QMainWindow):
         self.scene.request_delete_object.connect(self.delete_object)
         
         self.data_panel = DataPanel(self.recorder)
-        right_layout.addWidget(self.data_panel)
+        self.right_layout.addWidget(self.data_panel)
         
-        main_layout.addLayout(right_layout, stretch=1)
+        main_layout.addLayout(self.right_layout, stretch=1)
 
         self.is_playing = False
         self.statusBar().showMessage("准备就绪")

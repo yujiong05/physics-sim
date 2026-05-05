@@ -34,6 +34,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from ui.markdown_viewer import MarkdownFormulaViewer
 from engine.projectile_calc import (
     G_DEFAULT,
     Y_LAUNCH_EPS,
@@ -101,6 +102,17 @@ class PageProjectile(QWidget):
         configure_matplotlib_chinese_font()
         self._chat_ai = TeachingChatHelper(self, "projectile")
         self._build_ui()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(0, self._refresh_chat_webview)
+        QTimer.singleShot(100, self._refresh_chat_webview)
+        QTimer.singleShot(300, self._refresh_chat_webview)
+
+    def _refresh_chat_webview(self):
+        if hasattr(self, "_chat_log") and hasattr(self._chat_log, "force_refresh"):
+            self._chat_log.force_refresh()
 
     # ------------------------------------------------------------------
     # UI 构建
@@ -261,15 +273,12 @@ class PageProjectile(QWidget):
         right_lay = QVBoxLayout(right_inner)
         right_lay.setSpacing(14)
 
-        title_r = QLabel("AI 智能助教")
+        title_r = QLabel("智能助教")
         title_r.setStyleSheet("font-weight:600;font-size:12pt;color:#0f172a;")
 
-        self._chat_log = QTextBrowser()
-        self._chat_log.setObjectName("ChatLog")
-        self._chat_log.setOpenExternalLinks(False)
-        self._chat_log.setHtml(
-            "<p style='color:#64748b;'>您好！可提问抛物运动、空气阻力模型或仿真现象。"
-            "请先通过主窗口菜单「设置 → DeepSeek API 密钥」保存密钥；回复由 DeepSeek 生成。</p>"
+        self._chat_log = MarkdownFormulaViewer()
+        self._chat_log.set_markdown(
+            "可提问抛体运动、阻力系数或能量。请先在主窗口「设置 → DeepSeek API 密钥」保存密钥。"
         )
 
         input_row = QHBoxLayout()
@@ -296,7 +305,8 @@ class PageProjectile(QWidget):
         right_lay.addWidget(btn_lab)
 
         layout.addWidget(self._wrap_card(left_inner), stretch=6)
-        layout.addWidget(self._wrap_card(right_inner), stretch=4)
+        # 第三优先级：尝试去除外层复杂包装，裸布局测试是否实时刷新
+        layout.addWidget(right_inner, stretch=4)
         return page
 
     def _build_lab_view(self) -> QWidget:

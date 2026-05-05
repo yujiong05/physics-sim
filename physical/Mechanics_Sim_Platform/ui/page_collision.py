@@ -38,6 +38,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from ui.markdown_viewer import MarkdownFormulaViewer
 from engine.billiards_box import (
     BilliardsState,
     clamp_positions,
@@ -103,6 +104,16 @@ class PageCollision(QWidget):
         self._build_ui()
         self._stack.currentChanged.connect(self._on_stack_changed)
         self._refresh_transport_buttons()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self._refresh_chat_webview)
+        QTimer.singleShot(100, self._refresh_chat_webview)
+        QTimer.singleShot(300, self._refresh_chat_webview)
+
+    def _refresh_chat_webview(self):
+        if hasattr(self, "_chat_log") and hasattr(self._chat_log, "force_refresh"):
+            self._chat_log.force_refresh()
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -241,11 +252,9 @@ class PageCollision(QWidget):
         title_r = QLabel("智能助教")
         title_r.setStyleSheet("font-weight:600;font-size:12pt;color:#0f172a;")
 
-        self._chat_log = QTextBrowser()
-        self._chat_log.setObjectName("ChatLog")
-        self._chat_log.setHtml(
-            "<p style='color:#64748b;'>可提问动量守恒、恢复系数或碰撞分类。"
-            "请先在主窗口「设置 → DeepSeek API 密钥」保存密钥；回复由 DeepSeek 生成。</p>"
+        self._chat_log = MarkdownFormulaViewer()
+        self._chat_log.set_markdown(
+            "可提问动量守恒、恢复系数或碰撞分类。请先在主窗口「设置 → DeepSeek API 密钥」保存密钥。"
         )
 
         row = QHBoxLayout()
@@ -272,7 +281,8 @@ class PageCollision(QWidget):
         rl.addWidget(btn_lab)
 
         layout.addWidget(self._wrap_card(left_inner), stretch=6)
-        layout.addWidget(self._wrap_card(right_inner), stretch=4)
+        # 第三优先级：去除外层复杂包装，裸布局测试是否实时刷新
+        layout.addWidget(right_inner, stretch=4)
         return page
 
     def _build_lab_view(self) -> QWidget:

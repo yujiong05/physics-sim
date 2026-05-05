@@ -13,7 +13,7 @@ root_dir = os.path.abspath(os.path.join(platform_dir, "..", ".."))
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QCoreApplication
 from PyQt5.QtGui import QColor, QKeySequence
 from PyQt5.QtWidgets import (
     QAction,
@@ -35,6 +35,7 @@ from ui.page_collision import PageCollision
 from ui.page_pendulum import PagePendulum
 from ui.page_projectile import PageProjectile
 from ui.pages.page_menu import PageMenu
+from ui.teaching_chat_helper import TeachingChatHelper
 from gui.main_window import MainWindow as PhysicsSimWindow
 
 
@@ -137,6 +138,9 @@ class MainWindow(QMainWindow):
         self._on_nav_changed(0)
         self.setStyleSheet(get_platform_qss())
 
+        # 设置菜单
+        self._init_menu()
+
         # Ctrl+Tab / Ctrl+Shift+Tab 循环切换页面
         self._shortcut_next = QShortcut(QKeySequence("Ctrl+Tab"), self)
         self._shortcut_next.activated.connect(self._cycle_stack_next)
@@ -156,6 +160,16 @@ class MainWindow(QMainWindow):
         palette.setColor(palette.HighlightedText, QColor("#ffffff"))
         self.setPalette(palette)
 
+    def _init_menu(self) -> None:
+        """初始化顶部菜单栏。"""
+        menu_bar = self.menuBar()
+        settings_menu = menu_bar.addMenu("设置(&S)")
+        
+        api_action = QAction("DeepSeek API 密钥(&K)", self)
+        api_action.setStatusTip("配置用于 AI 智能助教的 API 密钥")
+        api_action.triggered.connect(self._open_deepseek_api_dialog)
+        settings_menu.addAction(api_action)
+
     def _on_nav_changed(self, index: int) -> None:
         self._stack.setCurrentIndex(index)
 
@@ -170,19 +184,32 @@ class MainWindow(QMainWindow):
         self.physics_sim.create_panel.layout().addWidget(btn_back_sim)
 
         # 2. 其他教学实验页
-        # 这些页面的结构：_stack -> LabView (index 1) -> Splitter -> LeftCard -> QVBoxLayout
         for page in [self._stack.widget(1), self._stack.widget(2), self._stack.widget(3)]:
-            # 找到它们的内部栈和实验室视图中的左侧布局
             try:
-                # 获取 PageProjectile/PageCollision/PagePendulum 实例
-                lab_view = page._stack.widget(1) # Lab View
-                splitter = lab_view.findChild(QSplitter)
-                left_card = splitter.widget(0)
-                left_layout = left_card.layout()
+                # 注入到教学页面 (Teaching View) 的左侧底部
+                teaching_view = page._stack.widget(0)
+                # teaching_view layout: [ left_card, right_inner ]
+                left_card = teaching_view.layout().itemAt(0).widget()
+                left_inner = left_card.layout().itemAt(0).widget()
+                left_layout = left_inner.layout()
                 if left_layout:
-                    left_layout.addWidget(self._create_back_btn())
-            except Exception:
-                pass
+                    btn_back_teaching = self._create_back_btn()
+                    left_layout.addWidget(btn_back_teaching)
+            except Exception as e:
+                print("Failed to inject back button to teaching view:", e)
+
+            try:
+                # 注入到实验室页面 (Lab View) 的左侧底部
+                lab_view = page._stack.widget(1)
+                splitter = lab_view.findChild(QSplitter)
+                if splitter:
+                    left_card = splitter.widget(0)
+                    left_layout = left_card.layout()
+                    if left_layout:
+                        btn_back_lab = self._create_back_btn()
+                        left_layout.addWidget(btn_back_lab)
+            except Exception as e:
+                print("Failed to inject back button to lab view:", e)
 
     def _create_back_btn(self) -> QPushButton:
         btn = QPushButton("🏠 返回主菜单")
@@ -213,7 +240,34 @@ class MainWindow(QMainWindow):
         self._on_nav_changed(idx)
 
 
+# 渲染模式配置：针对 QWebEngineView 滑动不刷新问题
+# 模式A "chromium_disable_gpu_only"：默认，仅禁用 Chromium GPU
+# 模式B "desktop_opengl"：强制使用桌面 OpenGL
+# 模式C "software_opengl"：强制使用软件 OpenGL (某些系统可能启动崩溃)
+WEBENGINE_RENDER_MODE = "chromium_disable_gpu_only"
+
 def main() -> int:
+    from PyQt5.QtCore import QT_VERSION_STR, PYQT_VERSION_STR
+    print(f"Qt Version: {QT_VERSION_STR}")
+    print(f"PyQt Version: {PYQT_VERSION_STR}")
+
+    # 第一优先级：修正 Chromium 启动参数，不要禁用软件光栅化
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
+        "--disable-gpu "
+        "--disable-gpu-compositing "
+        "--disable-accelerated-2d-canvas "
+        "--disable-features=CalculateNativeWinOcclusion,VizDisplayCompositor "
+        "--enable-begin-frame-control"
+    )
+
+    # 第二优先级：可切换的 OpenGL 测试模式
+    if WEBENGINE_RENDER_MODE == "desktop_opengl":
+        QCoreApplication.setAttribute(Qt.AA_UseDesktopOpenGL)
+    elif WEBENGINE_RENDER_MODE == "software_opengl":
+        QCoreApplication.setAttribute(Qt.AA_UseSoftwareOpenGL)
+    
+    QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
+
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     win = MainWindow()

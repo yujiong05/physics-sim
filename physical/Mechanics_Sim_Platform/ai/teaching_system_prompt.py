@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-LabKey = Literal["projectile", "collision", "pendulum"]
+LabKey = Literal["projectile", "collision", "pendulum", "lab"]
 
 BASE_TEACHING_SYSTEM_PROMPT = """你是「力学仿真教学平台」内置的 AI 助教，服务于课堂与自学场景。
 
@@ -43,6 +43,15 @@ _LAB_SUFFIX: dict[LabKey, str] = {
 【当前实验：实验三 — 双摆与混沌】
 知识范围：双摆动力学、角位移与角速度、相空间、混沌与初值敏感性、阻尼与能量监控等。
 请优先围绕上述内容作答；若用户问题明显属于其他实验，可一句点明并建议其切换到对应实验页面提问。""",
+    "lab": """
+
+【当前环境：力学仿真实验室（通用沙盒）】
+知识范围：这是一个自由创作环境。你可以协助学生构建复杂的力学系统（使用小球、方块、弹簧、细棒、绳子、轨道等组件）。
+你可以解释：
+- 各组件的物理属性（如质量、摩擦、恢复系数、刚度、阻尼等）。
+- 如何利用这些组件搭建特定的物理模型（如简谐振动、定滑轮、多体碰撞等）。
+- 仿真引擎的原理（如实时计算、约束求解等）。
+请鼓励用户通过右侧属性面板调整参数来观察不同现象。""",
 }
 
 
