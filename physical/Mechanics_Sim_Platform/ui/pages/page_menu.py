@@ -137,7 +137,7 @@ class HomeMenuCard(QFrame):
         super().__init__(parent)
         self.route = route
         self.accent = QColor(accent)
-        self.setFixedSize(240, 310)
+        self.setFixedSize(290, 360)
         self.setCursor(Qt.PointingHandCursor)
         self.setObjectName("HomeMenuCard")
         
@@ -154,33 +154,33 @@ class HomeMenuCard(QFrame):
 
         # 内部布局
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 25, 20, 25)
-        layout.setSpacing(10)
+        layout.setContentsMargins(22, 28, 22, 28)
+        layout.setSpacing(12)
 
         # 1. 图标区域 (彩色圆形背景)
         self.icon_container = QWidget()
-        self.icon_container.setFixedSize(70, 70)
+        self.icon_container.setFixedSize(82, 82)
         self.icon_container.setStyleSheet(f"""
             background-color: {self.accent.name()}15;
-            border-radius: 35px;
+            border-radius: 41px;
         """)
         icon_layout = QVBoxLayout(self.icon_container)
         icon_layout.setContentsMargins(0, 0, 0, 0)
         
         self.icon_label = QLabel(icon)
         self.icon_label.setAlignment(Qt.AlignCenter)
-        self.icon_label.setStyleSheet("font-size: 32pt; background: transparent;")
+        self.icon_label.setStyleSheet("font-size: 38pt; background: transparent;")
         icon_layout.addWidget(self.icon_label)
         
         layout.addWidget(self.icon_container, 0, Qt.AlignCenter)
-        layout.addSpacing(10)
+        layout.addSpacing(12)
         
         # 2. 标题
         self.title_label = QLabel(title)
         self.title_label.setAlignment(Qt.AlignCenter)
         self.title_label.setStyleSheet(f"""
             font-family: 'Microsoft YaHei', 'PingFang SC';
-            font-size: 22px;
+            font-size: 27px;
             font-weight: bold;
             color: #0f172a;
             background: transparent;
@@ -193,10 +193,10 @@ class HomeMenuCard(QFrame):
         self.desc_label.setWordWrap(True)
         self.desc_label.setStyleSheet("""
             font-family: 'Microsoft YaHei', 'PingFang SC';
-            font-size: 13px;
+            font-size: 16px;
             color: #475569;
             background: transparent;
-            line-height: 1.3;
+            line-height: 1.35;
         """)
         layout.addWidget(self.desc_label)
         
@@ -206,7 +206,7 @@ class HomeMenuCard(QFrame):
         self.action_label = QLabel("开始探索 →")
         self.action_label.setAlignment(Qt.AlignCenter)
         self.action_label.setStyleSheet(f"""
-            font-size: 13px;
+            font-size: 16px;
             font-weight: 600;
             color: #64748b;
             background: transparent;
@@ -234,7 +234,9 @@ class HomeMenuCard(QFrame):
         """)
         if hasattr(self, 'action_label'):
             color = self.accent.name() if is_hover else "#64748b"
-            self.action_label.setStyleSheet(f"color: {color}; font-weight: 600; background: transparent;")
+            self.action_label.setStyleSheet(
+                f"color: {color}; font-size: 16px; font-weight: 600; background: transparent;"
+            )
 
     def enterEvent(self, event):
         if self.base_pos is None:
@@ -309,23 +311,6 @@ class HomePage(QWidget):
         hero_layout = QVBoxLayout(hero_widget)
         hero_layout.setSpacing(12)
         
-        # 胶囊标签
-        tags_layout = QHBoxLayout()
-        tags_layout.setAlignment(Qt.AlignCenter)
-        tag_text = "Projectile · Collision · Double Pendulum · Virtual Lab"
-        self.tag_label = QLabel(tag_text)
-        self.tag_label.setStyleSheet("""
-            color: #64748b;
-            font-size: 13px;
-            font-weight: 500;
-            letter-spacing: 1px;
-            background-color: rgba(255, 255, 255, 120);
-            border-radius: 12px;
-            padding: 4px 15px;
-        """)
-        tags_layout.addWidget(self.tag_label)
-        hero_layout.addLayout(tags_layout)
-
         # 主标题
         self.title_label = QLabel("力学仿真教学平台")
         self.title_label.setAlignment(Qt.AlignCenter)
@@ -355,9 +340,9 @@ class HomePage(QWidget):
         
         # --- 卡片区域 ---
         self.grid_container = QWidget()
-        self.grid_container.setMaximumWidth(1200)
+        self.grid_container.setMaximumWidth(1320)
         self.grid_layout = QGridLayout(self.grid_container)
-        self.grid_layout.setSpacing(32)
+        self.grid_layout.setSpacing(36)
         self.grid_layout.setAlignment(Qt.AlignCenter)
         
         card_data = [
@@ -471,7 +456,7 @@ class HomePage(QWidget):
             if item.widget():
                 item.widget().hide()
             
-        if w > 1150:
+        if w > 1240:
             # 4 列
             for i, card in enumerate(self.cards):
                 card.show()
