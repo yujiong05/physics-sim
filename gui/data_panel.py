@@ -34,7 +34,7 @@ class DataPanel(QWidget):
         
         # 顶部提示
         tip = QLabel("显示单位：100 px = 1 m；图表已自动换算为 SI 单位。")
-        tip.setStyleSheet("color: #666; font-size: 10px;")
+        tip.setStyleSheet("color: #555; font-size: 11pt;")
         layout.addWidget(tip)
 
         # 1. 观测对象选择

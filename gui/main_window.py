@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QActionGroup, QFileDialog, QMessageBox, QLabel, QDialog,
                              QGroupBox, QTextBrowser, QLineEdit)
 from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QFont, QIcon
 import pyqtgraph as pg
 import numpy as np
 import math
@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
         self.create_menus()
         self.create_template_menu()
         self.init_ui()
+        self._apply_sandbox_base_font()
         self.clear_scene()
         
     def update_name_counters_from_scene(self):
@@ -394,6 +395,16 @@ class MainWindow(QMainWindow):
 
         self.is_playing = False
         self.statusBar().showMessage("准备就绪")
+
+    def _apply_sandbox_base_font(self) -> None:
+        """嵌入力学平台作第四模块时，整体略增大字号以与前三个实验页一致。"""
+        f = QFont(self.font())
+        target_pt = 11
+        if f.pointSize() > 0:
+            f.setPointSize(max(f.pointSize(), target_pt))
+        else:
+            f.setPointSize(target_pt)
+        self.setFont(f)
 
     def set_experiment_mode(self, mode):
         if mode == "horizontal":

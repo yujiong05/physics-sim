@@ -10,7 +10,7 @@ class ObjectCreatePanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(260)
+        self.setFixedWidth(288)
         self.init_ui()
 
     def init_ui(self):
@@ -94,7 +94,7 @@ class ObjectCreatePanel(QWidget):
         self.cb_type.currentIndexChanged.connect(on_type_changed)
 
         self.btn_create = QPushButton("创建对象")
-        self.btn_create.setStyleSheet("height: 40px; font-weight: bold;")
+        self.btn_create.setStyleSheet("height: 44px; font-size: 11pt; font-weight: bold;")
         self.btn_create.clicked.connect(self.on_create_clicked)
         create_layout.addWidget(self.btn_create)
 
