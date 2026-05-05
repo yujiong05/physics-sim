@@ -3,8 +3,8 @@
 主菜单页面：提供四个模块的选择入口。
 """
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtCore import Qt, pyqtSignal, QUrl
+from PyQt5.QtGui import QColor, QFont, QMovie
 from PyQt5.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
     QWidget,
     QGraphicsDropShadowEffect,
 )
+import os
 
 class MenuCard(QFrame):
     """自定义菜单卡片组件"""
@@ -62,13 +63,13 @@ class MenuCard(QFrame):
 
         self.setStyleSheet(f"""
             QFrame#MenuCard {{
-                background-color: white;
-                border: 2px solid #f3f4f6;
+                background-color: rgba(255, 255, 255, 230);
+                border: 1px solid rgba(226, 232, 240, 100);
                 border-radius: 20px;
             }}
             QFrame#MenuCard:hover {{
                 border: 2px solid {color};
-                background-color: #f9fafb;
+                background-color: white;
             }}
         """)
 
@@ -83,10 +84,42 @@ class PageMenu(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._init_background_gif()
         self._build_ui()
 
+    def _init_background_gif(self) -> None:
+        """初始化 GIF 背景"""
+        self.bg_label = QLabel(self)
+        self.bg_label.lower()
+        
+        # GIF 路径
+        gif_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+                                "assets", "background.gif")
+        
+        if os.path.exists(gif_path):
+            self.movie = QMovie(gif_path)
+            self.bg_label.setMovie(self.movie)
+            self.bg_label.setScaledContents(True)
+            self.movie.start()
+        else:
+            # 回退到渐变背景
+            self.setStyleSheet("""
+                PageMenu {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f1f5f9, stop:1 #cbd5e1);
+                }
+            """)
+
+    def resizeEvent(self, event):
+        self.bg_label.setGeometry(0, 0, self.width(), self.height())
+        if hasattr(self, 'overlay'):
+            self.overlay.setGeometry(0, 0, self.width(), self.height())
+        super().resizeEvent(event)
+
     def _build_ui(self) -> None:
-        main_layout = QVBoxLayout(self)
+        self.overlay = QWidget(self)
+        self.overlay.setStyleSheet("background: transparent;")
+        
+        main_layout = QVBoxLayout(self.overlay)
         main_layout.setContentsMargins(40, 40, 40, 40)
         main_layout.setSpacing(30)
 
@@ -94,11 +127,11 @@ class PageMenu(QWidget):
         header = QVBoxLayout()
         title = QLabel("力学仿真教学平台")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 32pt; font-weight: 800; color: #0f172a; margin-bottom: 5px;")
+        title.setStyleSheet("font-size: 32pt; font-weight: 800; color: #0f172a; margin-bottom: 5px; background: transparent;")
         
         subtitle = QLabel("探索物理之美，从这里开始")
         subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setStyleSheet("font-size: 14pt; color: #64748b;")
+        subtitle.setStyleSheet("font-size: 14pt; color: #475569; background: transparent;")
         
         header.addWidget(title)
         header.addWidget(subtitle)
@@ -106,6 +139,7 @@ class PageMenu(QWidget):
 
         # 模块网格
         grid_container = QWidget()
+        grid_container.setStyleSheet("background: transparent;")
         grid_layout = QGridLayout(grid_container)
         grid_layout.setSpacing(30)
         grid_layout.setAlignment(Qt.AlignCenter)
@@ -129,5 +163,5 @@ class PageMenu(QWidget):
         # 页脚
         footer = QLabel("")
         footer.setAlignment(Qt.AlignCenter)
-        footer.setStyleSheet("font-size: 9pt; color: #94a3b8;")
+        footer.setStyleSheet("font-size: 9pt; color: #94a3b8; background: transparent;")
         main_layout.addWidget(footer)
